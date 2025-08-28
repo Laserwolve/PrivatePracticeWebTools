@@ -4,9 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { KeywordPlanner } from '@/components/KeywordPlanner'
 import { MetaDescriptionGenerator } from '@/components/MetaDescriptionGenerator'
 import { LocalSEOChecker } from '@/components/LocalSEOChecker'
-import { ContentTopicGenerator } from '@/components/ContentTopicGenerator'
-import { PageTitleOptimizer } from '@/components/PageTitleOptimizer'
-import { MagnifyingGlass, Target, MapPin, PencilSimple, TextAa } from '@phosphor-icons/react'
+import { MagnifyingGlass, Target, MapPin } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 function App() {
@@ -33,20 +31,6 @@ function App() {
       description: 'Analyze and improve your local search presence',
       icon: MapPin,
       component: LocalSEOChecker
-    },
-    {
-      id: 'content',
-      title: 'Content Topic Generator',
-      description: 'Get blog post ideas that attract clients',
-      icon: PencilSimple,
-      component: ContentTopicGenerator
-    },
-    {
-      id: 'titles',
-      title: 'Page Title Optimizer',
-      description: 'Optimize page titles for search and clicks',
-      icon: TextAa,
-      component: PageTitleOptimizer
     }
   ]
 
@@ -64,7 +48,7 @@ function App() {
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
             {tools.map((tool) => {
               const Icon = tool.icon
               return (
