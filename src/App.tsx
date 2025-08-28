@@ -38,17 +38,15 @@ function App() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <header className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-foreground mb-4">
-            TherapyToolkit
-          </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Professional SEO tools designed specifically for therapist websites. 
-            Improve your online visibility and connect with more clients.
-          </p>
+          <img 
+            src="/images/logo.webp" 
+            alt="TherapyToolkit" 
+            className="mx-auto mb-4 h-16 w-auto"
+          />
         </header>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-8">
+          <TabsList className="grid w-full grid-cols-3 mb-8 h-auto">
             {tools.map((tool) => {
               const Icon = tool.icon
               return (
