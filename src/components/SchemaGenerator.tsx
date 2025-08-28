@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight, oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -29,6 +30,13 @@ interface Coordinates {
   longitude: string
 }
 
+interface OpeningHours {
+  id: string
+  dayOfWeek: string
+  opens: string
+  closes: string
+}
+
 interface Specialty {
   id: string
   name: string
@@ -48,8 +56,38 @@ interface SocialMedia {
 
 export function SchemaGenerator() {
   const { theme } = useTheme()
-  const [type, setType] = useState('LocalBusiness')
-  const [formData, setFormData] = useState({
+
+  // Local storage utility functions
+  const saveToLocalStorage = useCallback((key: string, data: any) => {
+    try {
+      localStorage.setItem(`schemaGenerator_${key}`, JSON.stringify(data))
+    } catch (error) {
+      console.warn('Failed to save to localStorage:', error)
+    }
+  }, [])
+
+  const loadFromLocalStorage = useCallback((key: string, defaultValue: any) => {
+    try {
+      const stored = localStorage.getItem(`schemaGenerator_${key}`)
+      return stored ? JSON.parse(stored) : defaultValue
+    } catch (error) {
+      console.warn('Failed to load from localStorage:', error)
+      return defaultValue
+    }
+  }, [])
+
+  const clearLocalStorage = useCallback(() => {
+    try {
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('schemaGenerator_'))
+      keys.forEach(key => localStorage.removeItem(key))
+      toast.success('All fields reset and local storage cleared!')
+    } catch (error) {
+      console.warn('Failed to clear localStorage:', error)
+    }
+  }, [])
+
+  // Default values
+  const defaultFormData = {
     url: '',
     contactPage: '',
     name: '',
@@ -63,40 +101,98 @@ export function SchemaGenerator() {
     telephone: '',
     areaServed: '',
     hasMap: '',
-    // Opening hours
-    mondayOpens: '09:00',
-    mondayCloses: '17:00',
-    tuesdayOpens: '09:00',
-    tuesdayCloses: '17:00',
-    wednesdayOpens: '09:00',
-    wednesdayCloses: '17:00',
-    thursdayOpens: '09:00',
-    thursdayCloses: '17:00',
-    fridayOpens: '09:00',
-    fridayCloses: '17:00',
-    saturdayOpens: '00:00',
-    saturdayCloses: '00:00',
-    sundayOpens: '00:00',
-    sundayCloses: '00:00',
-  })
-
-  const [additionalAddresses, setAdditionalAddresses] = useState<Address[]>([])
-  const [additionalCoordinates, setAdditionalCoordinates] = useState<Coordinates[]>([])
-  const [addresses, setAddresses] = useState<Address[]>([])
-  const [specialties, setSpecialties] = useState<Specialty[]>([])
-  const [faqs, setFaqs] = useState<FAQ[]>([])
-  const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMedia[]>([])
-  const [generatedSchema, setGeneratedSchema] = useState('')
-
-  const isSpecialtyPage = type === 'Product'
-  const isOrganizationPage = type === 'Organization'
-  const isFAQPage = type === 'FAQPage'
-
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const addAddress = () => {
+  const defaultOpeningHours = [
+    { id: '1', dayOfWeek: 'Monday', opens: '09:00', closes: '17:00' },
+    { id: '2', dayOfWeek: 'Tuesday', opens: '09:00', closes: '17:00' },
+    { id: '3', dayOfWeek: 'Wednesday', opens: '09:00', closes: '17:00' },
+    { id: '4', dayOfWeek: 'Thursday', opens: '09:00', closes: '17:00' },
+    { id: '5', dayOfWeek: 'Friday', opens: '09:00', closes: '17:00' }
+  ]
+
+  // State with localStorage initialization
+  const [type, setType] = useState(() => loadFromLocalStorage('type', 'LocalBusiness'))
+  const [formData, setFormData] = useState(() => loadFromLocalStorage('formData', defaultFormData))
+  const [additionalAddresses, setAdditionalAddresses] = useState<Address[]>(() => loadFromLocalStorage('additionalAddresses', []))
+  const [additionalCoordinates, setAdditionalCoordinates] = useState<Coordinates[]>(() => loadFromLocalStorage('additionalCoordinates', []))
+  const [addresses, setAddresses] = useState<Address[]>(() => loadFromLocalStorage('addresses', []))
+  const [specialties, setSpecialties] = useState<Specialty[]>(() => loadFromLocalStorage('specialties', []))
+  const [faqs, setFaqs] = useState<FAQ[]>(() => loadFromLocalStorage('faqs', []))
+  const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMedia[]>(() => loadFromLocalStorage('socialMediaLinks', []))
+  const [openingHours, setOpeningHours] = useState<OpeningHours[]>(() => loadFromLocalStorage('openingHours', defaultOpeningHours))
+  const [generatedSchema, setGeneratedSchema] = useState('')
+
+  // Memoized page type checks for better performance
+  const isSpecialtyPage = useMemo(() => type === 'Product', [type])
+  const isOrganizationPage = useMemo(() => type === 'Organization', [type])
+  const isFAQPage = useMemo(() => type === 'FAQPage', [type])
+
+  // Save to localStorage whenever state changes
+  useEffect(() => {
+    saveToLocalStorage('type', type)
+  }, [type, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('formData', formData)
+  }, [formData, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('addresses', addresses)
+  }, [addresses, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('specialties', specialties)
+  }, [specialties, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('faqs', faqs)
+  }, [faqs, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('socialMediaLinks', socialMediaLinks)
+  }, [socialMediaLinks, saveToLocalStorage])
+
+  useEffect(() => {
+    saveToLocalStorage('openingHours', openingHours)
+  }, [openingHours, saveToLocalStorage])
+
+  // Reset all fields function
+  const hasDataToReset = useMemo(() => {
+    const hasFormData = Object.values(formData).some(value => value !== '')
+    const hasAddresses = addresses.length > 0
+    const hasSpecialties = specialties.length > 0
+    const hasFaqs = faqs.length > 0
+    const hasSocialMedia = socialMediaLinks.length > 0
+    const hasCustomOpeningHours = openingHours.length !== defaultOpeningHours.length || 
+      openingHours.some((hour, index) => {
+        const defaultHour = defaultOpeningHours[index]
+        return !defaultHour || hour.dayOfWeek !== defaultHour.dayOfWeek || 
+               hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
+      })
+    
+    return hasFormData || hasAddresses || hasSpecialties || hasFaqs || hasSocialMedia || hasCustomOpeningHours
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours])
+
+  const resetAllFields = useCallback(() => {
+    setType('LocalBusiness')
+    setFormData(defaultFormData)
+    setAdditionalAddresses([])
+    setAdditionalCoordinates([])
+    setAddresses([])
+    setSpecialties([])
+    setFaqs([])
+    setSocialMediaLinks([])
+    setOpeningHours(defaultOpeningHours)
+    clearLocalStorage()
+    toast.success('All fields have been reset')
+  }, [clearLocalStorage, defaultFormData, defaultOpeningHours])
+
+  const handleInputChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }, [])
+
+  const addAddress = useCallback(() => {
     const newAddress: Address = {
       "@type": "PostalAddress",
       streetAddress: '',
@@ -108,7 +204,7 @@ export function SchemaGenerator() {
       longitude: ''
     }
     setAddresses(prev => [...prev, newAddress])
-  }
+  }, [])
 
   const updateAddress = (index: number, field: keyof Address, value: string) => {
     setAddresses(prev => prev.map((addr, i) => 
@@ -125,63 +221,83 @@ export function SchemaGenerator() {
     setAdditionalCoordinates([])
   }
 
-  const addSpecialty = () => {
+  const addSpecialty = useCallback(() => {
     const newSpecialty: Specialty = {
       id: Date.now().toString(),
       name: '',
       url: ''
     }
     setSpecialties(prev => [...prev, newSpecialty])
-  }
+  }, [])
 
-  const updateSpecialty = (id: string, field: 'name' | 'url', value: string) => {
+  const updateSpecialty = useCallback((id: string, field: 'name' | 'url', value: string) => {
     setSpecialties(prev => prev.map(specialty => 
       specialty.id === id ? { ...specialty, [field]: value } : specialty
     ))
-  }
+  }, [])
 
-  const removeSpecialty = (id: string) => {
+  const removeSpecialty = useCallback((id: string) => {
     setSpecialties(prev => prev.filter(specialty => specialty.id !== id))
-  }
+  }, [])
 
-  const addFAQ = () => {
+  const addFAQ = useCallback(() => {
     const newFAQ: FAQ = {
       id: Date.now().toString(),
       question: '',
       answer: ''
     }
     setFaqs(prev => [...prev, newFAQ])
-  }
+  }, [])
 
-  const updateFAQ = (id: string, field: 'question' | 'answer', value: string) => {
+  const updateFAQ = useCallback((id: string, field: 'question' | 'answer', value: string) => {
     setFaqs(prev => prev.map(faq => 
       faq.id === id ? { ...faq, [field]: value } : faq
     ))
-  }
+  }, [])
 
-  const removeFAQ = (id: string) => {
+  const removeFAQ = useCallback((id: string) => {
     setFaqs(prev => prev.filter(faq => faq.id !== id))
-  }
+  }, [])
 
-  const addSocialMedia = () => {
+  const addSocialMedia = useCallback(() => {
     const newSocialMedia: SocialMedia = {
       id: Date.now().toString(),
       url: ''
     }
     setSocialMediaLinks(prev => [...prev, newSocialMedia])
-  }
+  }, [])
 
-  const updateSocialMedia = (id: string, value: string) => {
+  const updateSocialMedia = useCallback((id: string, value: string) => {
     setSocialMediaLinks(prev => prev.map(social => 
       social.id === id ? { ...social, url: value } : social
     ))
-  }
+  }, [])
 
-  const removeSocialMedia = (id: string) => {
+  const removeSocialMedia = useCallback((id: string) => {
     setSocialMediaLinks(prev => prev.filter(social => social.id !== id))
-  }
+  }, [])
 
-  const generateSchema = () => {
+  const addOpeningHours = useCallback(() => {
+    const newOpeningHours: OpeningHours = {
+      id: Date.now().toString(),
+      dayOfWeek: 'Monday',
+      opens: '09:00',
+      closes: '17:00'
+    }
+    setOpeningHours(prev => [...prev, newOpeningHours])
+  }, [])
+
+  const updateOpeningHours = useCallback((id: string, field: keyof Omit<OpeningHours, 'id'>, value: string) => {
+    setOpeningHours(prev => prev.map(hours => 
+      hours.id === id ? { ...hours, [field]: value } : hours
+    ))
+  }, [])
+
+  const removeOpeningHours = useCallback((id: string) => {
+    setOpeningHours(prev => prev.filter(hours => hours.id !== id))
+  }, [])
+
+  const generateSchema = useCallback(() => {
     // Handle Organization type with simplified schema
     if (isOrganizationPage) {
       const { name, telephone, url } = formData
@@ -362,15 +478,12 @@ export function SchemaGenerator() {
       }))
     } : undefined
 
-    const openingHoursSpecification = [
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Monday", "opens": formData.mondayOpens, "closes": formData.mondayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Tuesday", "opens": formData.tuesdayOpens, "closes": formData.tuesdayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Wednesday", "opens": formData.wednesdayOpens, "closes": formData.wednesdayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Thursday", "opens": formData.thursdayOpens, "closes": formData.thursdayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Friday", "opens": formData.fridayOpens, "closes": formData.fridayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Saturday", "opens": formData.saturdayOpens, "closes": formData.saturdayCloses },
-      { "@type": "OpeningHoursSpecification", "dayOfWeek": "Sunday", "opens": formData.sundayOpens, "closes": formData.sundayCloses }
-    ]
+    const openingHoursSpecification = openingHours.map(hour => ({
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": hour.dayOfWeek,
+      "opens": hour.opens,
+      "closes": hour.closes
+    }))
 
     // Use the addresses array for all addresses
     const allAddresses: Address[] = [...addresses]
@@ -409,7 +522,7 @@ export function SchemaGenerator() {
       ...(allAddresses.length > 1 && { "address": allAddresses }),
       ...(allCoordinates.length === 1 && { "geo": allCoordinates[0] }),
       ...(allCoordinates.length > 1 && { "geo": allCoordinates }),
-      ...(openingHoursSpecification && { "openingHoursSpecification": openingHoursSpecification }),
+      ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
       ...(formData.areaServed && { "areaServed": { "@type": "AdministrativeArea", "name": formData.areaServed } }),
       ...(formData.hasMap && { "hasMap": formData.hasMap }),
       "parentOrganization": { "@id": `${url}/#organization` }
@@ -421,7 +534,7 @@ export function SchemaGenerator() {
     const schemaJson = JSON.stringify(schema, null, 2)
     const schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
     setGeneratedSchema(schemaHTML)
-  }
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage])
 
   const copyText = async () => {
     try {
@@ -433,40 +546,71 @@ export function SchemaGenerator() {
     }
   }
 
+  // Debounced schema generation for better performance
   useEffect(() => {
-    generateSchema()
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks])
+    const timeoutId = setTimeout(() => {
+      generateSchema()
+    }, 300) // 300ms delay
 
-  const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
-  const dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    return () => clearTimeout(timeoutId)
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours])
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Form */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select value={type} onValueChange={setType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="LocalBusiness">Home Page</SelectItem>
-                      <SelectItem value="Product">Specialty Page</SelectItem>
-                      <SelectItem value="FAQPage">FAQ Page</SelectItem>
-                      <SelectItem value="Organization">Other Page</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {isSpecialtyPage && (
+      {/* Basic Information - Full Width */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Information</CardTitle>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  disabled={!hasDataToReset}
+                >
+                  Reset all fields
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reset all fields?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will clear all form data, addresses, specialties, FAQs, social media links, and opening hours. 
+                    This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={resetAllFields}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    Reset all fields
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="type">Type</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LocalBusiness">Home Page</SelectItem>
+                    <SelectItem value="Product">Specialty Page</SelectItem>
+                    <SelectItem value="FAQPage">FAQ Page</SelectItem>
+                    <SelectItem value="Organization">Other Page</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>                {isSpecialtyPage && (
                   <div className="space-y-2">
                     <Label htmlFor="specialty">Specialty Name</Label>
                     <Input
@@ -563,7 +707,7 @@ export function SchemaGenerator() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="hasMap">Google Business Profile URL</Label>
+                      <Label htmlFor="hasMap">Google Business Profile CID URL</Label>
                       <Input
                         id="hasMap"
                         placeholder="e.g., https://maps.google.com/?cid=..."
@@ -871,14 +1015,95 @@ export function SchemaGenerator() {
                 </div>
               </div>
               )}
+
+              {/* Opening Hours Section (Home Page Only) */}
+              {!isOrganizationPage && !isFAQPage && !isSpecialtyPage && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label>Opening Hours</Label>
+                    <Button 
+                      type="button"
+                      onClick={addOpeningHours}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Hours
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {openingHours.map((hours) => (
+                      <div key={hours.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                        <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
+                          <div className="space-y-1">
+                            <Label className="text-xs">Day</Label>
+                            <select
+                              value={hours.dayOfWeek}
+                              onChange={(e) => updateOpeningHours(hours.id, 'dayOfWeek', e.target.value)}
+                              className="w-full p-2 border rounded-md text-sm"
+                            >
+                              <option value="Monday">Monday</option>
+                              <option value="Tuesday">Tuesday</option>
+                              <option value="Wednesday">Wednesday</option>
+                              <option value="Thursday">Thursday</option>
+                              <option value="Friday">Friday</option>
+                              <option value="Saturday">Saturday</option>
+                              <option value="Sunday">Sunday</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Opens</Label>
+                            <Input
+                              type="time"
+                              value={hours.opens}
+                              onChange={(e) => updateOpeningHours(hours.id, 'opens', e.target.value)}
+                              className="text-sm"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs">Closes</Label>
+                            <Input
+                              type="time"
+                              value={hours.closes}
+                              onChange={(e) => updateOpeningHours(hours.id, 'closes', e.target.value)}
+                              className="text-sm"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={() => removeOpeningHours(hours.id)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    
+                    {openingHours.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                        <p>No opening hours added yet.</p>
+                        <p className="text-sm">Click "Add Hours" to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Pricing (Specialty Page Only) */}
-          {isSpecialtyPage && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Pricing Information</CardTitle>
+          {/* Secondary Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+              {/* Pricing (Specialty Page Only) */}
+              {isSpecialtyPage && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Pricing Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -915,48 +1140,15 @@ export function SchemaGenerator() {
               </CardContent>
             </Card>
           )}
-        </div>
+            </div>
+          </div>
 
-        {/* Opening Hours */}
-        {!isOrganizationPage && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Opening Hours</CardTitle>
-              </CardHeader>
-            <CardContent className="space-y-4">
-              {days.map((day, index) => (
-                <div key={day} className="space-y-2">
-                  <Label>{dayLabels[index]}</Label>
-                  <div className="flex gap-2 items-center">
-                    <Input
-                      type="time"
-                      value={formData[`${day}Opens` as keyof typeof formData]}
-                      onChange={(e) => handleInputChange(`${day}Opens`, e.target.value)}
-                      className="flex-1"
-                    />
-                    <span className="text-sm">to</span>
-                    <Input
-                      type="time"
-                      value={formData[`${day}Closes` as keyof typeof formData]}
-                      onChange={(e) => handleInputChange(`${day}Closes`, e.target.value)}
-                      className="flex-1"
-                    />
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-        )}
-      </div>
-
-      {/* Generated Schema Output */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Generated Schema</CardTitle>
-          {/* <CardDescription>
-            Copy this JSON-LD schema markup and add it to your website's head section
+          {/* Generated Schema Output */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Generated Schema</CardTitle>
+              {/* <CardDescription>
+                Copy this JSON-LD schema markup and add it to your website's head section
           </CardDescription> */}
         </CardHeader>
         <CardContent>
