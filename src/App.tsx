@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { KeywordPlanner } from '@/components/KeywordPlanner'
@@ -84,22 +84,23 @@ function App() {
 
           <div className="relative">
             <AnimatePresence mode="wait">
-              {tools.map((tool) => {
-                if (tool.id !== activeTab) return null
-                
-                const Component = tool.component
-                return (
-                  <motion.div
-                    key={tool.id}
-                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                    transition={{
-                      duration: 0.3,
-                      ease: [0.4, 0.0, 0.2, 1],
-                      scale: { duration: 0.2 },
-                    }}
-                  >
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                transition={{
+                  duration: 0.3,
+                  ease: [0.4, 0.0, 0.2, 1],
+                  scale: { duration: 0.2 },
+                }}
+              >
+                {(() => {
+                  const tool = tools.find(t => t.id === activeTab)
+                  if (!tool) return null
+                  
+                  const Component = tool.component
+                  return (
                     <Card className="shadow-lg border-0 bg-card/80 backdrop-blur-sm">
                       <motion.div
                         initial={{ opacity: 0, y: 10 }}
@@ -124,9 +125,9 @@ function App() {
                         </CardContent>
                       </motion.div>
                     </Card>
-                  </motion.div>
-                )
-              })}
+                  )
+                })()}
+              </motion.div>
             </AnimatePresence>
           </div>
         </Tabs>
