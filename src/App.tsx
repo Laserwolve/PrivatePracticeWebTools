@@ -4,7 +4,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { SchemaGenerator } from '@/components/SchemaGenerator'
 import { LegalPageGenerator } from '@/components/LegalPageGenerator'
 import { ImageOptimizer } from '@/components/ImageOptimizer'
-import { Code, FileText, Image } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 function App() {
@@ -15,21 +14,18 @@ function App() {
       id: 'schema',
       title: 'Schema Generator',
       description: 'Generate structured data markup for your therapy practice',
-      icon: Code,
       component: SchemaGenerator
     },
     {
       id: 'legal',
       title: 'Legal Page Generator',
       description: 'Generate legal pages like Terms of Service and Privacy Policy',
-      icon: FileText,
       component: LegalPageGenerator
     },
     {
       id: 'images',
       title: 'Image Optimizer (coming soon!)',
       description: 'Optimize images for better website performance',
-      icon: Image,
       component: ImageOptimizer
     }
   ]
@@ -48,15 +44,13 @@ function App() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3 mb-8 h-auto">
             {tools.map((tool) => {
-              const Icon = tool.icon
               return (
                 <TabsTrigger
                   key={tool.id}
                   value={tool.id}
                   className="flex flex-col gap-2 p-4 h-auto transition-all duration-200 ease-out"
                 >
-                  <Icon size={20} />
-                  <span className="text-xs font-medium hidden sm:block">
+                  <span className="text-xs font-medium">
                     {tool.title}
                   </span>
                 </TabsTrigger>
@@ -90,8 +84,7 @@ function App() {
                         transition={{ duration: 0.4, delay: 0.1 }}
                       >
                         <CardHeader>
-                          <CardTitle className="flex items-center gap-3">
-                            <tool.icon size={24} className="text-primary" />
+                          <CardTitle>
                             {tool.title}
                           </CardTitle>
                           <CardDescription>{tool.description}</CardDescription>
