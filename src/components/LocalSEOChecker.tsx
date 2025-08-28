@@ -21,7 +21,7 @@ interface SEOFactor {
 interface SEOReport {
   overallScore: number
   factors: SEOFactor[]
-  timestamp: Date
+  timestamp: Date | string
 }
 
 export function LocalSEOChecker() {
@@ -279,7 +279,7 @@ export function LocalSEOChecker() {
                           Local SEO Report
                         </div>
                         <div className="text-sm text-muted-foreground">
-                          {savedReport.timestamp.toLocaleDateString()} at {savedReport.timestamp.toLocaleTimeString()}
+                          {new Date(savedReport.timestamp).toLocaleDateString()} at {new Date(savedReport.timestamp).toLocaleTimeString()}
                         </div>
                       </div>
                       <div className={`text-xl font-bold ${getScoreColor(savedReport.overallScore)}`}>
