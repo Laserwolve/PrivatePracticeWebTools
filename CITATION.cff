@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use this software in your research or practice, please cite it as below."
+type: software
+title: "Private Practice Web Tools"
+abstract: "A comprehensive web application providing mental health professionals with practical, easy-to-use tools to improve their practice's online presence and legal compliance. Features include schema markup generation for SEO optimization, legal document templates for therapy practices, and web performance optimization tools."
+authors:
+  - family-names: "Laserwolve"
+    given-names: ""
+    orcid: ""
+repository-code: "https://github.com/Laserwolve/PrivatePracticeWebTools"
+url: "https://github.com/Laserwolve/PrivatePracticeWebTools"
+license: MIT
+keywords:
+  - "mental health"
+  - "therapy practice"
+  - "SEO tools"
+  - "schema markup"
+  - "legal documents"
+  - "web development"
+  - "healthcare technology"
+  - "private practice"
+  - "counseling"
+  - "React"
+  - "TypeScript"
+  - "accessibility"
+version: "1.0.0"
+date-released: "2025-08-28"
+preferred-citation:
+  type: software
+  title: "Private Practice Web Tools: SEO and Legal Compliance Tools for Mental Health Professionals"
+  authors:
+    - family-names: "Laserwolve"
+      given-names: ""
+  repository-code: "https://github.com/Laserwolve/PrivatePracticeWebTools"
+  url: "https://github.com/Laserwolve/PrivatePracticeWebTools"
+  license: MIT
+  version: "1.0.0"
+  date-released: "2025-08-28"

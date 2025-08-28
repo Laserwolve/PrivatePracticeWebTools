@@ -70,7 +70,7 @@ function App() {
           </div>
           <img 
             src={theme === 'dark' ? "/images/logoDark.webp" : "/images/logo.webp"}
-            alt="TherapyToolkit" 
+            alt="Private Practice Web Tools" 
             className="mx-auto mb-4 h-16 w-auto"
           />
         </header>
