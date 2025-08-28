@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -122,6 +123,7 @@ export function SchemaGenerator() {
   const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMedia[]>(() => loadFromLocalStorage('socialMediaLinks', []))
   const [openingHours, setOpeningHours] = useState<OpeningHours[]>(() => loadFromLocalStorage('openingHours', defaultOpeningHours))
   const [generatedSchema, setGeneratedSchema] = useState('')
+  const [showJSONLD, setShowJSONLD] = useState(() => loadFromLocalStorage('showJSONLD', false))
 
   // Memoized page type checks for better performance
   const isSpecialtyPage = useMemo(() => type === 'Product', [type])
@@ -157,6 +159,10 @@ export function SchemaGenerator() {
     saveToLocalStorage('openingHours', openingHours)
   }, [openingHours, saveToLocalStorage])
 
+  useEffect(() => {
+    saveToLocalStorage('showJSONLD', showJSONLD)
+  }, [showJSONLD, saveToLocalStorage])
+
   // Reset all fields function
   const hasDataToReset = useMemo(() => {
     const hasFormData = Object.values(formData).some(value => value !== '')
@@ -171,8 +177,8 @@ export function SchemaGenerator() {
                hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
       })
     
-    return hasFormData || hasAddresses || hasSpecialties || hasFaqs || hasSocialMedia || hasCustomOpeningHours
-  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours])
+    return hasFormData || hasAddresses || hasSpecialties || hasFaqs || hasSocialMedia || hasCustomOpeningHours || type !== 'LocalBusiness' || showJSONLD !== false
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, type, showJSONLD])
 
   const resetAllFields = useCallback(() => {
     setType('LocalBusiness')
@@ -184,6 +190,7 @@ export function SchemaGenerator() {
     setFaqs([])
     setSocialMediaLinks([])
     setOpeningHours(defaultOpeningHours)
+    setShowJSONLD(false)
     clearLocalStorage()
     toast.success('All fields have been reset')
   }, [clearLocalStorage, defaultFormData, defaultOpeningHours])
@@ -538,7 +545,14 @@ export function SchemaGenerator() {
 
   const copyText = async () => {
     try {
-      await navigator.clipboard.writeText(generatedSchema)
+      let textToCopy = generatedSchema
+      if (showJSONLD) {
+        // Remove the script tags to get just the JSON-LD
+        textToCopy = generatedSchema
+          .replace(/^<script type="application\/ld\+json">\s*/, '')
+          .replace(/\s*<\/script>$/, '')
+      }
+      await navigator.clipboard.writeText(textToCopy)
       toast.success('Schema copied to clipboard!')
     } catch (err) {
       toast.error('Failed to copy to clipboard')
@@ -1153,7 +1167,17 @@ export function SchemaGenerator() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Button onClick={copyText} variant="outline">Copy Text</Button>
+            <div className="flex items-center justify-between">
+              <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="show-json-ld" className="text-sm">Remove HTML Wrapper</Label>
+                <Switch
+                  id="show-json-ld"
+                  checked={showJSONLD}
+                  onCheckedChange={setShowJSONLD}
+                />
+              </div>
+            </div>
             <div className="relative">
               <SyntaxHighlighter
                 language="json"
@@ -1167,7 +1191,12 @@ export function SchemaGenerator() {
                 }}
                 wrapLongLines
               >
-                {generatedSchema}
+                {showJSONLD 
+                  ? generatedSchema
+                      .replace(/^<script type="application\/ld\+json">\s*/, '')
+                      .replace(/\s*<\/script>$/, '')
+                  : generatedSchema
+                }
               </SyntaxHighlighter>
             </div>
           </div>
