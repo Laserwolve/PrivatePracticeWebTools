@@ -1,4 +1,6 @@
-# Private Practice Web Tools## 🚀 Getting Started
+# Private Practice Web Tools
+
+## 🚀 Getting Started
 
 ### Prerequisites
 - Node.js (version 18 or higher)
