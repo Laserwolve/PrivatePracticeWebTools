@@ -1,36 +1,36 @@
 import React, { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { KeywordPlanner } from '@/components/KeywordPlanner'
-import { MetaDescriptionGenerator } from '@/components/MetaDescriptionGenerator'
-import { LocalSEOChecker } from '@/components/LocalSEOChecker'
-import { MagnifyingGlass, Target, MapPin } from '@phosphor-icons/react'
+import { SchemaGenerator } from '@/components/SchemaGenerator'
+import { LegalPageGenerator } from '@/components/LegalPageGenerator'
+import { ImageOptimizer } from '@/components/ImageOptimizer'
+import { Code, FileText, Image } from '@phosphor-icons/react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('keywords')
+  const [activeTab, setActiveTab] = useState('schema')
 
   const tools = [
     {
-      id: 'keywords',
-      title: 'Keyword Planner',
-      description: 'Discover relevant keywords for your therapy practice',
-      icon: MagnifyingGlass,
-      component: KeywordPlanner
+      id: 'schema',
+      title: 'Schema Generator',
+      description: 'Generate structured data markup for your therapy practice',
+      icon: Code,
+      component: SchemaGenerator
     },
     {
-      id: 'meta',
-      title: 'Meta Description Generator',
-      description: 'Create compelling meta descriptions for better CTR',
-      icon: Target,
-      component: MetaDescriptionGenerator
+      id: 'legal',
+      title: 'Legal Page Generator',
+      description: 'Generate legal pages like Terms of Service and Privacy Policy',
+      icon: FileText,
+      component: LegalPageGenerator
     },
     {
-      id: 'local',
-      title: 'Local SEO Checker',
-      description: 'Analyze and improve your local search presence',
-      icon: MapPin,
-      component: LocalSEOChecker
+      id: 'images',
+      title: 'Image Optimizer (coming soon!)',
+      description: 'Optimize images for better website performance',
+      icon: Image,
+      component: ImageOptimizer
     }
   ]
 
