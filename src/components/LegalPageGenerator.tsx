@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { toast } from 'sonner'
 
 interface FormData {
   companyName: string
@@ -27,7 +28,7 @@ export function LegalPageGenerator() {
     city: '',
     state: '',
     postalCode: '',
-    country: '',
+    country: 'United States of America',
     websiteUrl: '',
     contactUrl: '',
     date: new Date().toISOString().split('T')[0]
@@ -291,14 +292,13 @@ export function LegalPageGenerator() {
     setGeneratedContent(content)
   }
 
-  const highlightText = () => {
-    const output = document.getElementById('legal-output')
-    if (output && output.innerText.trim()) {
-      const range = document.createRange()
-      range.selectNodeContents(output)
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
+  const copyText = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedContent)
+      toast.success('Legal page content copied to clipboard!')
+    } catch (err) {
+      toast.error('Failed to copy to clipboard')
+      console.error('Failed to copy: ', err)
     }
   }
 
@@ -311,10 +311,10 @@ export function LegalPageGenerator() {
       {/* Form */}
       <Card>
         <CardHeader>
-          <CardTitle>Legal Page Generator</CardTitle>
-          <CardDescription>
+          <CardTitle>Page Information</CardTitle>
+          {/* <CardDescription>
             Generate legal pages for your therapy practice website
-          </CardDescription>
+          </CardDescription> */}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -398,7 +398,7 @@ export function LegalPageGenerator() {
                 id="country"
                 value={formData.country}
                 onChange={(e) => handleInputChange('country', e.target.value)}
-                placeholder="United States"
+                placeholder="United States of America"
               />
             </div>
 
@@ -435,9 +435,7 @@ export function LegalPageGenerator() {
             </div>
 
             <div className="flex items-end">
-              <Button onClick={highlightText} variant="outline">
-                Highlight Text
-              </Button>
+              {/* Button moved to output card */}
             </div>
           </div>
         </CardContent>
@@ -447,16 +445,18 @@ export function LegalPageGenerator() {
       <Card>
         <CardHeader>
           <CardTitle>Generated Legal Page</CardTitle>
-          <CardDescription>
-            Copy the content below and add it to your website
-          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div
-            id="legal-output"
-            className="prose prose-sm max-w-none bg-muted p-6 rounded-lg max-h-96 overflow-y-auto"
-            dangerouslySetInnerHTML={{ __html: generatedContent }}
-          />
+          <div className="space-y-4">
+            <Button onClick={copyText} variant="outline">
+              Copy Text
+            </Button>
+            <div
+              id="legal-output"
+              className="prose prose-sm max-w-none bg-muted p-6 rounded-lg max-h-96 overflow-y-auto"
+              dangerouslySetInnerHTML={{ __html: generatedContent }}
+            />
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -6,10 +6,6 @@ export function ImageOptimizer() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Image Optimizer</CardTitle>
-          <CardDescription>
-            Optimize images for your therapy practice website
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-64 bg-muted/50 rounded-lg border-2 border-dashed border-muted-foreground/25">
