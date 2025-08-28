@@ -7,6 +7,7 @@ import { LocalSEOChecker } from '@/components/LocalSEOChecker'
 import { ContentTopicGenerator } from '@/components/ContentTopicGenerator'
 import { PageTitleOptimizer } from '@/components/PageTitleOptimizer'
 import { MagnifyingGlass, Target, MapPin, PencilSimple, TextAa } from '@phosphor-icons/react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 function App() {
   const [activeTab, setActiveTab] = useState('keywords')
@@ -70,7 +71,7 @@ function App() {
                 <TabsTrigger
                   key={tool.id}
                   value={tool.id}
-                  className="flex flex-col gap-2 p-4 h-auto"
+                  className="flex flex-col gap-2 p-4 h-auto transition-all duration-200 ease-out"
                 >
                   <Icon size={20} />
                   <span className="text-xs font-medium hidden sm:block">
@@ -81,25 +82,53 @@ function App() {
             })}
           </TabsList>
 
-          {tools.map((tool) => {
-            const Component = tool.component
-            return (
-              <TabsContent key={tool.id} value={tool.id}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-3">
-                      <tool.icon size={24} className="text-primary" />
-                      {tool.title}
-                    </CardTitle>
-                    <CardDescription>{tool.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Component />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            )
-          })}
+          <div className="relative">
+            <AnimatePresence mode="wait">
+              {tools.map((tool) => {
+                if (tool.id !== activeTab) return null
+                
+                const Component = tool.component
+                return (
+                  <motion.div
+                    key={tool.id}
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                    transition={{
+                      duration: 0.3,
+                      ease: [0.4, 0.0, 0.2, 1],
+                      scale: { duration: 0.2 },
+                    }}
+                  >
+                    <Card className="shadow-lg border-0 bg-card/80 backdrop-blur-sm">
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.1 }}
+                      >
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-3">
+                            <tool.icon size={24} className="text-primary" />
+                            {tool.title}
+                          </CardTitle>
+                          <CardDescription>{tool.description}</CardDescription>
+                        </CardHeader>
+                      </motion.div>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.2 }}
+                      >
+                        <CardContent>
+                          <Component />
+                        </CardContent>
+                      </motion.div>
+                    </Card>
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </div>
         </Tabs>
       </div>
     </div>
