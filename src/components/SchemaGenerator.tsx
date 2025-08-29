@@ -161,11 +161,113 @@ export function SchemaGenerator() {
   const [lastEditedHours, setLastEditedHours] = useState<{ opens: string, closes: string }>({ opens: '09:00', closes: '17:00' })
   const [generatedSchema, setGeneratedSchema] = useState('')
   const [showJSONLD, setShowJSONLD] = useState(() => loadFromLocalStorage('showJSONLD', false))
+  const [removeSquarespaceSchema, setRemoveSquarespaceSchema] = useState(() => loadFromLocalStorage('removeSquarespaceSchema', true))
+  const [cidUrl, setCidUrl] = useState('')
+
+  // URL validation utility function
+  const isValidUrl = useCallback((url: string) => {
+    if (!url.trim()) return true // Empty URLs are valid (optional fields)
+    try {
+      new URL(url)
+      return url.startsWith('http://') || url.startsWith('https://')
+    } catch {
+      return false
+    }
+  }, [])
+
+  // State for URL validation errors
+  const [urlErrors, setUrlErrors] = useState<Record<string, string>>({})
+
+  // Function to validate and set URL error
+  const validateUrl = useCallback((field: string, url: string) => {
+    if (!isValidUrl(url)) {
+      setUrlErrors(prev => ({
+        ...prev,
+        [field]: url.trim() ? 'Please enter a valid URL starting with http:// or https://' : ''
+      }))
+    } else {
+      setUrlErrors(prev => {
+        const newErrors = { ...prev }
+        delete newErrors[field]
+        return newErrors
+      })
+    }
+  }, [isValidUrl])
 
   // Memoized page type checks for better performance
   const isSpecialtyPage = useMemo(() => type === 'Product', [type])
   const isOrganizationPage = useMemo(() => type === 'Organization', [type])
   const isFAQPage = useMemo(() => type === 'FAQPage', [type])
+
+  // Function to parse Google Business Profile URL and extract coordinates and CID
+  const parseGoogleBusinessUrl = useCallback(async (url: string) => {
+    try {
+      // Extract latitude and longitude from URL parameters
+      const urlObj = new URL(url)
+      
+      // Look for coordinates in the path (format: /@40.0682184,-105.1819262,17z)
+      const coords = urlObj.pathname.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/)
+      
+      let latitude = ''
+      let longitude = ''
+      let cid = ''
+
+      if (coords) {
+        latitude = coords[1]
+        longitude = coords[2]
+      }
+
+      // Extract CID from the URL - look for the hex format in the URL
+      // Format: !1s0x876bf1cafb263f9f:0x5a01627dae1cf2d8
+      const cidMatch = url.match(/!1s0x[a-f0-9]+:0x([a-f0-9]+)/)
+      if (cidMatch) {
+        // Convert hex CID to decimal
+        cid = parseInt(cidMatch[1], 16).toString()
+      } else {
+        // Alternative format: direct CID in URL
+        const directCidMatch = url.match(/[?&]cid=(\d+)/)
+        if (directCidMatch) {
+          cid = directCidMatch[1]
+        } else {
+          // If CID not found in URL, try to fetch it from the page
+          try {
+            const response = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`)
+            const data = await response.json()
+            const html = data.contents
+            
+            // Look for CID in various formats in the HTML
+            const cidRegexes = [
+              /"cid":"(\d+)"/,
+              /maps\?cid=(\d+)/,
+              /ludocid=(\d+)/,
+              /"ludocid":"(\d+)"/,
+              /!1s0x[a-f0-9]+:0x([a-f0-9]+)/
+            ]
+            
+            for (const regex of cidRegexes) {
+              const match = html.match(regex)
+              if (match) {
+                // If it's a hex value, convert to decimal
+                if (regex.source.includes('0x')) {
+                  cid = parseInt(match[1], 16).toString()
+                } else {
+                  cid = match[1]
+                }
+                break
+              }
+            }
+          } catch (fetchError) {
+            console.warn('Could not fetch CID from page:', fetchError)
+          }
+        }
+      }
+
+      return { latitude, longitude, cid }
+    } catch (error) {
+      console.error('Error parsing Google Business URL:', error)
+      return { latitude: '', longitude: '', cid: '' }
+    }
+  }, [])
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -200,6 +302,17 @@ export function SchemaGenerator() {
     saveToLocalStorage('showJSONLD', showJSONLD)
   }, [showJSONLD, saveToLocalStorage])
 
+  useEffect(() => {
+    saveToLocalStorage('removeSquarespaceSchema', removeSquarespaceSchema)
+  }, [removeSquarespaceSchema, saveToLocalStorage])
+
+  // When removeSquarespaceSchema is toggled, adjust showJSONLD
+  useEffect(() => {
+    if (removeSquarespaceSchema) {
+      setShowJSONLD(false)
+    }
+  }, [removeSquarespaceSchema])
+
   // Reset all fields function
   const hasDataToReset = useMemo(() => {
     const hasFormData = Object.values(formData).some(value => value !== '')
@@ -228,8 +341,8 @@ export function SchemaGenerator() {
                hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
       })
     
-    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false
-  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD])
+    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD, removeSquarespaceSchema])
 
   const resetAllFields = useCallback(() => {
     // Don't reset the type, keep it as currently selected
@@ -242,13 +355,66 @@ export function SchemaGenerator() {
     setSocialMediaLinks([])
     setOpeningHours(defaultOpeningHours)
     setShowJSONLD(false)
+    setRemoveSquarespaceSchema(true)
     clearLocalStorage()
     toast.success('All fields have been reset')
   }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultOpeningHours])
 
-  const handleInputChange = useCallback((field: string, value: string) => {
+  const handleInputChange = useCallback(async (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
-  }, [])
+    
+    // Validate URL fields
+    const urlFields = ['url', 'logoUrl', 'contactPage', 'schedulerPage', 'hasMap']
+    if (urlFields.includes(field)) {
+      validateUrl(field, value)
+    }
+    
+    // If the field is hasMap (Google Business Profile URL), parse it for coordinates and CID
+    if (field === 'hasMap' && value.includes('google.com/maps')) {
+      try {
+        const { latitude, longitude, cid } = await parseGoogleBusinessUrl(value)
+        
+        // Update the first address with the parsed coordinates
+        if ((latitude && longitude)) {
+          setAddresses(prev => 
+            prev.map((addr, index) => 
+              index === 0 
+                ? { ...addr, latitude, longitude }
+                : addr
+            )
+          )
+        }
+        
+        // Update CID URL for schema generation
+        if (cid) {
+          setCidUrl(`https://www.google.com/maps?cid=${cid}`)
+        } else {
+          setCidUrl('')
+        }
+      } catch (error) {
+        console.error('Error parsing Google Business URL:', error)
+        toast.error('Error parsing Google Business Profile URL')
+      }
+    } else if (field === 'hasMap') {
+      // Clear CID URL if hasMap is cleared or not a Google Maps URL
+      setCidUrl('')
+    }
+  }, [parseGoogleBusinessUrl, validateUrl])
+
+  // Function to get the CID URL for hasMap from the user's Google Business Profile URL
+  const getCidUrl = useCallback(async (url: string) => {
+    if (!url || !url.includes('google.com/maps')) {
+      return url // Return original URL if it's not a Google Maps URL
+    }
+    
+    try {
+      const { cid } = await parseGoogleBusinessUrl(url)
+      return cid ? `https://www.google.com/maps?cid=${cid}` : url
+    } catch (error) {
+      console.error('Error getting CID URL:', error)
+      return url // Return original URL on error
+    }
+  }, [parseGoogleBusinessUrl])
 
   // Calculate duration between opening and closing times
   const calculateDuration = useCallback((opens: string, closes: string) => {
@@ -316,7 +482,11 @@ export function SchemaGenerator() {
     setSpecialties(prev => prev.map(specialty => 
       specialty.id === id ? { ...specialty, [field]: value } : specialty
     ))
-  }, [])
+    // Validate specialty URL
+    if (field === 'url') {
+      validateUrl(`specialty_${id}`, value)
+    }
+  }, [validateUrl])
 
   const removeSpecialty = useCallback((id: string) => {
     setSpecialties(prev => prev.filter(specialty => specialty.id !== id))
@@ -353,7 +523,9 @@ export function SchemaGenerator() {
     setSocialMediaLinks(prev => prev.map(social => 
       social.id === id ? { ...social, url: value } : social
     ))
-  }, [])
+    // Validate social media URL
+    validateUrl(`social_${id}`, value)
+  }, [validateUrl])
 
   const removeSocialMedia = useCallback((id: string) => {
     setSocialMediaLinks(prev => prev.filter(social => social.id !== id))
@@ -454,6 +626,27 @@ export function SchemaGenerator() {
     setOpeningHours(prev => prev.filter(hours => hours.id !== id))
   }, [])
 
+  // Helper function to generate complete schema HTML with optional Squarespace removal script
+  const generateSchemaHTML = useCallback((schema: any) => {
+    const schemaJson = JSON.stringify(schema, null, 2)
+    let schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
+
+    if (removeSquarespaceSchema) {
+      schemaHTML += `\n\n<script>
+  window.addEventListener('load', () => {
+    const schemaScripts = document.querySelectorAll('script[type="application/ld+json"]');
+    schemaScripts.forEach(script => {
+      if (script.textContent.includes('squarespace.com')) {
+        script.remove();
+      }
+    });
+  });
+</script>`
+    }
+
+    return schemaHTML
+  }, [removeSquarespaceSchema])
+
   const generateSchema = useCallback(() => {
     // Handle Organization type with simplified schema
     if (isOrganizationPage) {
@@ -487,9 +680,7 @@ export function SchemaGenerator() {
         ...(orgGeoCoordinates && { "geo": orgGeoCoordinates })
       }
 
-      const schemaJson = JSON.stringify(schema, null, 2)
-      const schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
-      setGeneratedSchema(schemaHTML)
+      setGeneratedSchema(generateSchemaHTML(schema))
       return
     }
 
@@ -514,9 +705,7 @@ export function SchemaGenerator() {
         })
       }
 
-      const schemaJson = JSON.stringify(schema, null, 2)
-      const schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
-      setGeneratedSchema(schemaHTML)
+      setGeneratedSchema(generateSchemaHTML(schema))
       return
     }
 
@@ -581,43 +770,10 @@ export function SchemaGenerator() {
         }),
         "audience": { "@type": "Audience", "audienceType": "Adults seeking therapy" },
         ...(availableChannel.length > 0 && { "availableChannel": availableChannel }),
-        "brand": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#organization` },
-        "inLanguage": "en"
+        "brand": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#organization` }
       }
 
-      // Add FAQ page if FAQs exist
-      if (faqs.length > 0) {
-        const faqSchema = {
-          "@context": "https://schema.org",
-          "@type": "FAQPage",
-          "mainEntity": faqs.map(faq => ({
-            "@type": "Question",
-            "name": faq.question,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": faq.answer
-            }
-          }))
-        }
-        
-        // For specialty pages with FAQs, we might want to include both schemas
-        // For now, just include the FAQ in the service schema
-        schema.hasFAQ = {
-          "@type": "FAQPage",
-          "mainEntity": faqs.map(faq => ({
-            "@type": "Question",
-            "name": faq.question,
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": faq.answer
-            }
-          }))
-        }
-      }
-
-      const schemaJson = JSON.stringify(schema, null, 2)
-      const schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
-      setGeneratedSchema(schemaHTML)
+      setGeneratedSchema(generateSchemaHTML(schema))
       return
     }
 
@@ -678,11 +834,6 @@ export function SchemaGenerator() {
       }))
 
     const potentialAction = [
-      contactPage && {
-        "@type": "ContactAction",
-        "target": contactPage,
-        "name": "Contact"
-      },
       schedulerPage && {
         "@type": "ReserveAction",
         "target": schedulerPage,
@@ -706,17 +857,15 @@ export function SchemaGenerator() {
       ...(allCoordinates.length > 1 && { "geo": allCoordinates }),
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
       ...(formData.areaServed && { "areaServed": { "@type": "AdministrativeArea", "name": formData.areaServed } }),
-      ...(formData.hasMap && { "hasMap": formData.hasMap }),
+      ...((cidUrl || formData.hasMap) && { "hasMap": cidUrl || formData.hasMap }),
       "parentOrganization": { "@id": `${url}/#organization` }
     }
 
     if (potentialAction.length) schema.potentialAction = potentialAction
     if (makesOffer) schema.makesOffer = makesOffer
 
-    const schemaJson = JSON.stringify(schema, null, 2)
-    const schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
-    setGeneratedSchema(schemaHTML)
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage])
+    setGeneratedSchema(generateSchemaHTML(schema))
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, cidUrl, generateSchemaHTML])
 
   const copyText = async () => {
     try {
@@ -822,7 +971,11 @@ export function SchemaGenerator() {
                     placeholder="e.g., https://www.example.com/"
                     value={formData.url}
                     onChange={(e) => handleInputChange('url', e.target.value)}
+                    className={urlErrors.url ? 'border-red-500 focus-visible:ring-red-500' : ''}
                   />
+                  {urlErrors.url && (
+                    <p className="text-xs text-red-600">{urlErrors.url}</p>
+                  )}
                 </div>
 
                 {!isOrganizationPage && !isFAQPage && (
@@ -833,7 +986,11 @@ export function SchemaGenerator() {
                       placeholder="e.g., https://www.example.com/logo.png"
                       value={formData.logoUrl}
                       onChange={(e) => handleInputChange('logoUrl', e.target.value)}
+                      className={urlErrors.logoUrl ? 'border-red-500 focus-visible:ring-red-500' : ''}
                     />
+                    {urlErrors.logoUrl && (
+                      <p className="text-xs text-red-600">{urlErrors.logoUrl}</p>
+                    )}
                   </div>
                 )}
 
@@ -846,7 +1003,11 @@ export function SchemaGenerator() {
                         placeholder="e.g., https://www.example.com/contact"
                         value={formData.contactPage}
                         onChange={(e) => handleInputChange('contactPage', e.target.value)}
+                        className={urlErrors.contactPage ? 'border-red-500 focus-visible:ring-red-500' : ''}
                       />
+                      {urlErrors.contactPage && (
+                        <p className="text-xs text-red-600">{urlErrors.contactPage}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -856,7 +1017,11 @@ export function SchemaGenerator() {
                         placeholder="e.g., https://www.example.com/schedule"
                         value={formData.schedulerPage}
                         onChange={(e) => handleInputChange('schedulerPage', e.target.value)}
+                        className={urlErrors.schedulerPage ? 'border-red-500 focus-visible:ring-red-500' : ''}
                       />
+                      {urlErrors.schedulerPage && (
+                        <p className="text-xs text-red-600">{urlErrors.schedulerPage}</p>
+                      )}
                     </div>
                   </>
                 )}
@@ -883,7 +1048,7 @@ export function SchemaGenerator() {
                   </div>
                 )}
 
-                {!isSpecialtyPage && !isOrganizationPage && (
+                {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="areaServed">Area Served</Label>
@@ -894,17 +1059,26 @@ export function SchemaGenerator() {
                         onChange={(e) => handleInputChange('areaServed', e.target.value)}
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="hasMap">Google Business Profile URL</Label>
-                      <Input
-                        id="hasMap"
-                        placeholder="e.g., https://maps.google.com/?cid=..."
-                        value={formData.hasMap}
-                        onChange={(e) => handleInputChange('hasMap', e.target.value)}
-                      />
-                    </div>
                   </>
+                )}
+
+                {!isFAQPage && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="hasMap">Google Business Profile URL</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Paste the URL from the Google Business Profile on Google Maps — not the Google search results. Wait for the longitude and latitude to populate in the URL before copying.
+                    </p>
+                    <Input
+                      id="hasMap"
+                      placeholder="e.g., https://www.google.com/maps/place/Business+Name/@40.0682184,-105.1819262,17z/data=!3m1!4b1!4m6!3m5!1s0x876bf1cafb263f9f:0x5a01627dae1cf2d8!8m2!3d40.0682184!4d-105.1819262!16s%2Fg%2F11fzfdydb2?entry=ttu&g_ep=EgoyMDI1MDgyNS4wIKXMDSoASAFQAw%3D%3D"
+                      value={formData.hasMap}
+                      onChange={(e) => handleInputChange('hasMap', e.target.value)}
+                      className={urlErrors.hasMap ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                    />
+                    {urlErrors.hasMap && (
+                      <p className="text-xs text-red-600">{urlErrors.hasMap}</p>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -940,20 +1114,24 @@ export function SchemaGenerator() {
                   
                   <div className="space-y-3">
                     {specialties.map((specialty) => (
-                      <div key={specialty.id} className="flex gap-2 items-center p-3 border rounded-lg">
-                        <div className="flex-1">
+                      <div key={specialty.id} className="flex gap-2 items-start p-3 border rounded-lg">
+                        <div className="flex-1 space-y-1">
                           <Input
                             placeholder="e.g., Anxiety Therapy"
                             value={specialty.name}
                             onChange={(e) => updateSpecialty(specialty.id, 'name', e.target.value)}
                           />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 space-y-1">
                           <Input
                             placeholder="e.g., https://example.com/anxiety-therapy"
                             value={specialty.url}
                             onChange={(e) => updateSpecialty(specialty.id, 'url', e.target.value)}
+                            className={urlErrors[`specialty_${specialty.id}`] ? 'border-red-500 focus-visible:ring-red-500' : ''}
                           />
+                          {urlErrors[`specialty_${specialty.id}`] && (
+                            <p className="text-xs text-red-600">{urlErrors[`specialty_${specialty.id}`]}</p>
+                          )}
                         </div>
                         <Button
                           type="button"
@@ -996,13 +1174,17 @@ export function SchemaGenerator() {
                   
                   <div className="space-y-3">
                     {socialMediaLinks.map((social) => (
-                      <div key={social.id} className="flex gap-2 items-center p-3 border rounded-lg">
-                        <div className="flex-1">
+                      <div key={social.id} className="flex gap-2 items-start p-3 border rounded-lg">
+                        <div className="flex-1 space-y-1">
                           <Input
                             placeholder="Social media URL (e.g., https://facebook.com/yourpractice)"
                             value={social.url}
                             onChange={(e) => updateSocialMedia(social.id, e.target.value)}
+                            className={urlErrors[`social_${social.id}`] ? 'border-red-500 focus-visible:ring-red-500' : ''}
                           />
+                          {urlErrors[`social_${social.id}`] && (
+                            <p className="text-xs text-red-600">{urlErrors[`social_${social.id}`]}</p>
+                          )}
                         </div>
                         <Button
                           type="button"
@@ -1027,7 +1209,7 @@ export function SchemaGenerator() {
               )}
 
               {/* FAQs Section */}
-              {(isSpecialtyPage || isFAQPage) && (
+              {isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label>FAQs</Label>
@@ -1167,26 +1349,6 @@ export function SchemaGenerator() {
                             onChange={(e) => updateAddress(index, 'addressCountry', e.target.value)}
                           />
                         </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`latitude-${index}`}>Latitude</Label>
-                          <Input
-                            id={`latitude-${index}`}
-                            placeholder="e.g., 40.0682202"
-                            value={address.latitude || ''}
-                            onChange={(e) => updateAddress(index, 'latitude', e.target.value)}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor={`longitude-${index}`}>Longitude</Label>
-                          <Input
-                            id={`longitude-${index}`}
-                            placeholder="e.g., -105.1819251"
-                            value={address.longitude || ''}
-                            onChange={(e) => updateAddress(index, 'longitude', e.target.value)}
-                          />
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -1304,13 +1466,24 @@ export function SchemaGenerator() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="show-json-ld" className="text-sm">Remove HTML Wrapper</Label>
-                <Switch
-                  id="show-json-ld"
-                  checked={showJSONLD}
-                  onCheckedChange={setShowJSONLD}
-                />
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="remove-squarespace-schema" className="text-sm">Remove default Squarespace Schema</Label>
+                  <Switch
+                    id="remove-squarespace-schema"
+                    checked={removeSquarespaceSchema}
+                    onCheckedChange={setRemoveSquarespaceSchema}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="show-json-ld" className="text-sm">Remove HTML Wrapper</Label>
+                  <Switch
+                    id="show-json-ld"
+                    checked={showJSONLD}
+                    onCheckedChange={setShowJSONLD}
+                    disabled={removeSquarespaceSchema}
+                  />
+                </div>
               </div>
             </div>
             <div className="relative">
