@@ -1045,8 +1045,8 @@ export function SchemaGenerator() {
                   <SelectContent>
                     <SelectItem value="LocalBusiness">Home Page</SelectItem>
                     <SelectItem value="Product">Specialty Page</SelectItem>
-                    <SelectItem value="FAQPage">FAQ Page</SelectItem>
-                    <SelectItem value="Organization">Other Page</SelectItem>
+                    {/* <SelectItem value="FAQPage">FAQ Page</SelectItem> */}
+                    {/* <SelectItem value="Organization">Other Page</SelectItem> */}
                   </SelectContent>
                 </Select>
               </div>                {isSpecialtyPage && (

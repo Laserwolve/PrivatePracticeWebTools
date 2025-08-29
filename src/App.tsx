@@ -1,15 +1,17 @@
-import React, { useState } from 'react'
+import React, { useState, Suspense, lazy } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Toaster } from '@/components/ui/sonner'
-import { SchemaGenerator } from '@/components/SchemaGenerator'
-import { LegalPageGenerator } from '@/components/LegalPageGenerator'
-import { ImageOptimizer } from '@/components/ImageOptimizer'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useTheme } from '@/hooks/use-theme'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FileCode, Scale, Image, Mail } from 'lucide-react'
+
+// Lazy load heavy components
+const SchemaGenerator = lazy(() => import('@/components/SchemaGenerator').then(m => ({ default: m.SchemaGenerator })))
+const LegalPageGenerator = lazy(() => import('@/components/LegalPageGenerator').then(m => ({ default: m.LegalPageGenerator })))
+const ImageOptimizer = lazy(() => import('@/components/ImageOptimizer').then(m => ({ default: m.ImageOptimizer })))
 
 function App() {
   const [activeTab, setActiveTab] = useState('schema')
@@ -132,7 +134,13 @@ function App() {
                         transition={{ duration: 0.4, delay: 0.2 }}
                       >
                         <CardContent>
-                          <Component />
+                          <Suspense fallback={
+                            <div className="flex items-center justify-center p-8">
+                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                            </div>
+                          }>
+                            <Component />
+                          </Suspense>
                         </CardContent>
                       </motion.div>
                     </Card>
