@@ -55,6 +55,104 @@ interface SocialMedia {
   url: string
 }
 
+// ISO-3166 Alpha-2 country codes
+const COUNTRY_CODES = [
+  { code: 'US', name: 'United States' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'AT', name: 'Austria' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'FI', name: 'Finland' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'PT', name: 'Portugal' },
+  { code: 'GR', name: 'Greece' },
+  { code: 'CZ', name: 'Czech Republic' },
+  { code: 'PL', name: 'Poland' },
+  { code: 'HU', name: 'Hungary' },
+  { code: 'SK', name: 'Slovakia' },
+  { code: 'SI', name: 'Slovenia' },
+  { code: 'HR', name: 'Croatia' },
+  { code: 'BG', name: 'Bulgaria' },
+  { code: 'RO', name: 'Romania' },
+  { code: 'EE', name: 'Estonia' },
+  { code: 'LV', name: 'Latvia' },
+  { code: 'LT', name: 'Lithuania' },
+  { code: 'LU', name: 'Luxembourg' },
+  { code: 'MT', name: 'Malta' },
+  { code: 'CY', name: 'Cyprus' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'CN', name: 'China' },
+  { code: 'IN', name: 'India' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'TW', name: 'Taiwan' },
+  { code: 'MY', name: 'Malaysia' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'VN', name: 'Vietnam' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'AR', name: 'Argentina' },
+  { code: 'CL', name: 'Chile' },
+  { code: 'CO', name: 'Colombia' },
+  { code: 'PE', name: 'Peru' },
+  { code: 'UY', name: 'Uruguay' },
+  { code: 'PY', name: 'Paraguay' },
+  { code: 'BO', name: 'Bolivia' },
+  { code: 'EC', name: 'Ecuador' },
+  { code: 'VE', name: 'Venezuela' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'MA', name: 'Morocco' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'GH', name: 'Ghana' },
+  { code: 'TN', name: 'Tunisia' },
+  { code: 'DZ', name: 'Algeria' },
+  { code: 'IL', name: 'Israel' },
+  { code: 'TR', name: 'Turkey' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'QA', name: 'Qatar' },
+  { code: 'KW', name: 'Kuwait' },
+  { code: 'OM', name: 'Oman' },
+  { code: 'BH', name: 'Bahrain' },
+  { code: 'JO', name: 'Jordan' },
+  { code: 'LB', name: 'Lebanon' },
+  { code: 'RU', name: 'Russia' },
+  { code: 'UA', name: 'Ukraine' },
+  { code: 'BY', name: 'Belarus' },
+  { code: 'KZ', name: 'Kazakhstan' },
+  { code: 'UZ', name: 'Uzbekistan' },
+  { code: 'KG', name: 'Kyrgyzstan' },
+  { code: 'TJ', name: 'Tajikistan' },
+  { code: 'TM', name: 'Turkmenistan' },
+  { code: 'GE', name: 'Georgia' },
+  { code: 'AM', name: 'Armenia' },
+  { code: 'AZ', name: 'Azerbaijan' },
+  { code: 'MD', name: 'Moldova' },
+  { code: 'RS', name: 'Serbia' },
+  { code: 'ME', name: 'Montenegro' },
+  { code: 'BA', name: 'Bosnia and Herzegovina' },
+  { code: 'MK', name: 'North Macedonia' },
+  { code: 'AL', name: 'Albania' },
+  { code: 'XK', name: 'Kosovo' },
+  { code: 'IS', name: 'Iceland' }
+].sort((a, b) => a.name.localeCompare(b.name))
+
 export function SchemaGenerator() {
   const { theme } = useTheme()
 
@@ -116,7 +214,7 @@ export function SchemaGenerator() {
       addressLocality: '',
       addressRegion: '',
       postalCode: '',
-      addressCountry: 'United States of America',
+      addressCountry: 'US',
       latitude: '',
       longitude: ''
     }
@@ -447,7 +545,7 @@ export function SchemaGenerator() {
       addressLocality: '',
       addressRegion: '',
       postalCode: '',
-      addressCountry: 'United States of America',
+      addressCountry: 'US',
       latitude: '',
       longitude: ''
     }
@@ -650,7 +748,7 @@ export function SchemaGenerator() {
   const generateSchema = useCallback(() => {
     // Handle Organization type with simplified schema
     if (isOrganizationPage) {
-      const { name, telephone, url } = formData
+      const { name, telephone, url, logoUrl } = formData
       
       // Create clean address without latitude/longitude for Organization schema
       const cleanOrgAddress = addresses.length > 0 ? {
@@ -675,6 +773,7 @@ export function SchemaGenerator() {
         "@id": `${url}/#organization`,
         ...(name && { "name": name }),
         ...(url && { "url": url }),
+        ...(logoUrl && { "image": logoUrl }),
         ...(telephone && { "telephone": telephone }),
         ...(cleanOrgAddress && { "address": cleanOrgAddress }),
         ...(orgGeoCoordinates && { "geo": orgGeoCoordinates })
@@ -686,13 +785,14 @@ export function SchemaGenerator() {
 
     // Handle FAQ Page type with simplified schema
     if (isFAQPage) {
-      const { name, url } = formData
+      const { name, url, logoUrl } = formData
       
       const schema: any = {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "@id": `${url}/#faq`,
         ...(name && { "name": `${name} – FAQs` }),
+        ...(logoUrl && { "image": logoUrl }),
         ...(faqs.length > 0 && { 
           "mainEntity": faqs.map(faq => ({
             "@type": "Question",
@@ -711,7 +811,7 @@ export function SchemaGenerator() {
 
     // Handle Specialty Page (Service) type with Service schema
     if (isSpecialtyPage) {
-      const { specialty, url, description, name } = formData
+      const { specialty, url, description, name, logoUrl } = formData
       const serviceSlug = specialty.toLowerCase().replace(/\s+/g, '-')
       
       const availableChannel: any[] = []
@@ -761,6 +861,7 @@ export function SchemaGenerator() {
         ...(specialty && { "name": specialty }),
         "serviceType": "Therapy and Counseling",
         ...(url && { "url": url }),
+        ...(logoUrl && { "image": logoUrl }),
         ...(description && { "description": description }),
         "provider": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#localbusiness` },
         ...(formData.areaServed && { 
@@ -891,7 +992,7 @@ export function SchemaGenerator() {
     }, 300) // 300ms delay
 
     return () => clearTimeout(timeoutId)
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours])
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema])
 
   return (
     <div className="space-y-6">
@@ -978,21 +1079,19 @@ export function SchemaGenerator() {
                   )}
                 </div>
 
-                {!isOrganizationPage && !isFAQPage && (
-                  <div className="space-y-2">
-                    <Label htmlFor="logoUrl">Logo URL</Label>
-                    <Input
-                      id="logoUrl"
-                      placeholder="e.g., https://www.example.com/logo.png"
-                      value={formData.logoUrl}
-                      onChange={(e) => handleInputChange('logoUrl', e.target.value)}
-                      className={urlErrors.logoUrl ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                    />
-                    {urlErrors.logoUrl && (
-                      <p className="text-xs text-red-600">{urlErrors.logoUrl}</p>
-                    )}
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="logoUrl">Logo URL</Label>
+                  <Input
+                    id="logoUrl"
+                    placeholder="e.g., https://www.example.com/logo.png"
+                    value={formData.logoUrl}
+                    onChange={(e) => handleInputChange('logoUrl', e.target.value)}
+                    className={urlErrors.logoUrl ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                  />
+                  {urlErrors.logoUrl && (
+                    <p className="text-xs text-red-600">{urlErrors.logoUrl}</p>
+                  )}
+                </div>
 
                 {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                   <>
@@ -1342,12 +1441,21 @@ export function SchemaGenerator() {
 
                         <div className="space-y-2">
                           <Label htmlFor={`addressCountry-${index}`}>Country</Label>
-                          <Input
-                            id={`addressCountry-${index}`}
-                            placeholder="e.g., USA"
+                          <Select
                             value={address.addressCountry}
-                            onChange={(e) => updateAddress(index, 'addressCountry', e.target.value)}
-                          />
+                            onValueChange={(value) => updateAddress(index, 'addressCountry', value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a country" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {COUNTRY_CODES.map((country) => (
+                                <SelectItem key={country.code} value={country.code}>
+                                  {country.name} ({country.code})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                     </div>
@@ -1488,7 +1596,7 @@ export function SchemaGenerator() {
             </div>
             <div className="relative">
               <SyntaxHighlighter
-                language="json"
+                language={showJSONLD ? "json" : "html"}
                 style={theme === 'dark' ? oneDark : oneLight}
                 customStyle={{
                   margin: 0,
