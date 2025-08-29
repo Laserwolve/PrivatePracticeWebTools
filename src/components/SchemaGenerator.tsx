@@ -92,9 +92,6 @@ export function SchemaGenerator() {
     url: '',
     contactPage: '',
     name: '',
-    lowPrice: '0',
-    highPrice: '1000',
-    priceCurrency: 'USD',
     specialty: '',
     logoUrl: '',
     schedulerPage: '',
@@ -112,16 +109,56 @@ export function SchemaGenerator() {
     { id: '5', dayOfWeek: 'Friday', opens: '09:00', closes: '17:00' }
   ]
 
+  const defaultAddresses = [
+    {
+      "@type": "PostalAddress",
+      streetAddress: '',
+      addressLocality: '',
+      addressRegion: '',
+      postalCode: '',
+      addressCountry: 'United States of America',
+      latitude: '',
+      longitude: ''
+    }
+  ]
+
+  const defaultSpecialties = [
+    {
+      id: '1',
+      name: '',
+      url: ''
+    }
+  ]
+
+  const defaultFaqs = [
+    {
+      id: '1',
+      question: '',
+      answer: ''
+    },
+    {
+      id: '2',
+      question: '',
+      answer: ''
+    },
+    {
+      id: '3',
+      question: '',
+      answer: ''
+    }
+  ]
+
   // State with localStorage initialization
   const [type, setType] = useState(() => loadFromLocalStorage('type', 'LocalBusiness'))
   const [formData, setFormData] = useState(() => loadFromLocalStorage('formData', defaultFormData))
   const [additionalAddresses, setAdditionalAddresses] = useState<Address[]>(() => loadFromLocalStorage('additionalAddresses', []))
   const [additionalCoordinates, setAdditionalCoordinates] = useState<Coordinates[]>(() => loadFromLocalStorage('additionalCoordinates', []))
-  const [addresses, setAddresses] = useState<Address[]>(() => loadFromLocalStorage('addresses', []))
-  const [specialties, setSpecialties] = useState<Specialty[]>(() => loadFromLocalStorage('specialties', []))
-  const [faqs, setFaqs] = useState<FAQ[]>(() => loadFromLocalStorage('faqs', []))
+  const [addresses, setAddresses] = useState<Address[]>(() => loadFromLocalStorage('addresses', defaultAddresses))
+  const [specialties, setSpecialties] = useState<Specialty[]>(() => loadFromLocalStorage('specialties', defaultSpecialties))
+  const [faqs, setFaqs] = useState<FAQ[]>(() => loadFromLocalStorage('faqs', defaultFaqs))
   const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMedia[]>(() => loadFromLocalStorage('socialMediaLinks', []))
   const [openingHours, setOpeningHours] = useState<OpeningHours[]>(() => loadFromLocalStorage('openingHours', defaultOpeningHours))
+  const [lastEditedHours, setLastEditedHours] = useState<{ opens: string, closes: string }>({ opens: '09:00', closes: '17:00' })
   const [generatedSchema, setGeneratedSchema] = useState('')
   const [showJSONLD, setShowJSONLD] = useState(() => loadFromLocalStorage('showJSONLD', false))
 
@@ -166,9 +203,23 @@ export function SchemaGenerator() {
   // Reset all fields function
   const hasDataToReset = useMemo(() => {
     const hasFormData = Object.values(formData).some(value => value !== '')
-    const hasAddresses = addresses.length > 0
-    const hasSpecialties = specialties.length > 0
-    const hasFaqs = faqs.length > 0
+    const hasNonDefaultAddresses = addresses.length !== defaultAddresses.length || 
+      addresses.some((address, index) => {
+        const defaultAddress = defaultAddresses[index]
+        return !defaultAddress || Object.keys(address).some(key => 
+          address[key as keyof Address] !== defaultAddress[key as keyof Address]
+        )
+      })
+    const hasNonDefaultSpecialties = specialties.length !== defaultSpecialties.length || 
+      specialties.some((specialty, index) => {
+        const defaultSpecialty = defaultSpecialties[index]
+        return !defaultSpecialty || specialty.name !== defaultSpecialty.name || specialty.url !== defaultSpecialty.url
+      })
+    const hasNonDefaultFaqs = faqs.length !== defaultFaqs.length || 
+      faqs.some((faq, index) => {
+        const defaultFaq = defaultFaqs[index]
+        return !defaultFaq || faq.question !== defaultFaq.question || faq.answer !== defaultFaq.answer
+      })
     const hasSocialMedia = socialMediaLinks.length > 0
     const hasCustomOpeningHours = openingHours.length !== defaultOpeningHours.length || 
       openingHours.some((hour, index) => {
@@ -177,26 +228,50 @@ export function SchemaGenerator() {
                hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
       })
     
-    return hasFormData || hasAddresses || hasSpecialties || hasFaqs || hasSocialMedia || hasCustomOpeningHours || type !== 'LocalBusiness' || showJSONLD !== false
-  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, type, showJSONLD])
+    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD])
 
   const resetAllFields = useCallback(() => {
-    setType('LocalBusiness')
+    // Don't reset the type, keep it as currently selected
     setFormData(defaultFormData)
     setAdditionalAddresses([])
     setAdditionalCoordinates([])
-    setAddresses([])
-    setSpecialties([])
-    setFaqs([])
+    setAddresses(defaultAddresses)
+    setSpecialties(defaultSpecialties)
+    setFaqs(defaultFaqs)
     setSocialMediaLinks([])
     setOpeningHours(defaultOpeningHours)
     setShowJSONLD(false)
     clearLocalStorage()
     toast.success('All fields have been reset')
-  }, [clearLocalStorage, defaultFormData, defaultOpeningHours])
+  }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultOpeningHours])
 
   const handleInputChange = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }, [])
+
+  // Calculate duration between opening and closing times
+  const calculateDuration = useCallback((opens: string, closes: string) => {
+    if (!opens || !closes) return ''
+    
+    const [openHour, openMin] = opens.split(':').map(Number)
+    const [closeHour, closeMin] = closes.split(':').map(Number)
+    
+    let totalMinutes = (closeHour * 60 + closeMin) - (openHour * 60 + openMin)
+    
+    // Handle case where closing time is next day (past midnight)
+    if (totalMinutes < 0) {
+      totalMinutes += 24 * 60
+    }
+    
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    
+    if (minutes === 0) {
+      return `Open for ${hours} hour${hours !== 1 ? 's' : ''}`
+    } else {
+      return `Open for ${hours} hour${hours !== 1 ? 's' : ''}, ${minutes} minute${minutes !== 1 ? 's' : ''}`
+    }
   }, [])
 
   const addAddress = useCallback(() => {
@@ -285,20 +360,95 @@ export function SchemaGenerator() {
   }, [])
 
   const addOpeningHours = useCallback(() => {
+    // Array of all days of the week in order
+    const allDays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    
+    // Get currently used days
+    const usedDays = openingHours.map(hours => hours.dayOfWeek)
+    
+    // Find the first unused day, or default to Sunday if all days are used
+    const nextDay = allDays.find(day => !usedDays.includes(day)) || 'Sunday'
+    
     const newOpeningHours: OpeningHours = {
       id: Date.now().toString(),
-      dayOfWeek: 'Monday',
-      opens: '09:00',
-      closes: '17:00'
+      dayOfWeek: nextDay,
+      opens: lastEditedHours.opens,
+      closes: lastEditedHours.closes
     }
-    setOpeningHours(prev => [...prev, newOpeningHours])
-  }, [])
+    
+    setOpeningHours(prev => {
+      const updated = [...prev, newOpeningHours]
+      // Sort entries in chronological order
+      const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+      return updated.sort((a, b) => dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek))
+    })
+  }, [openingHours, lastEditedHours])
 
   const updateOpeningHours = useCallback((id: string, field: keyof Omit<OpeningHours, 'id'>, value: string) => {
-    setOpeningHours(prev => prev.map(hours => 
-      hours.id === id ? { ...hours, [field]: value } : hours
-    ))
-  }, [])
+    // If changing dayOfWeek, check for duplicates
+    if (field === 'dayOfWeek') {
+      const existingEntry = openingHours.find(hours => hours.id !== id && hours.dayOfWeek === value)
+      if (existingEntry) {
+        toast.error(`An entry for ${value} already exists!`)
+        return // Prevent the update
+      }
+    }
+
+    // If changing closes time, validate it's after opens time
+    if (field === 'closes') {
+      const currentEntry = openingHours.find(hours => hours.id === id)
+      if (currentEntry && currentEntry.opens) {
+        const [openHour, openMin] = currentEntry.opens.split(':').map(Number)
+        const [closeHour, closeMin] = value.split(':').map(Number)
+        
+        const openTotalMinutes = openHour * 60 + openMin
+        const closeTotalMinutes = closeHour * 60 + closeMin
+        
+        if (closeTotalMinutes <= openTotalMinutes) {
+          toast.error('Unable to modify closing time: The closing time must come after the opening time.')
+          return // Prevent the update
+        }
+      }
+    }
+
+    // If changing opens time, validate it's before closes time
+    if (field === 'opens') {
+      const currentEntry = openingHours.find(hours => hours.id === id)
+      if (currentEntry && currentEntry.closes) {
+        const [openHour, openMin] = value.split(':').map(Number)
+        const [closeHour, closeMin] = currentEntry.closes.split(':').map(Number)
+        
+        const openTotalMinutes = openHour * 60 + openMin
+        const closeTotalMinutes = closeHour * 60 + closeMin
+        
+        if (openTotalMinutes >= closeTotalMinutes) {
+          toast.error('Unable to modify opening time: The opening time must come before the closing time.')
+          return // Prevent the update
+        }
+      }
+    }
+
+    setOpeningHours(prev => {
+      const updated = prev.map(hours => 
+        hours.id === id ? { ...hours, [field]: value } : hours
+      )
+      
+      // Update last edited hours if the field is opens or closes
+      if (field === 'opens' || field === 'closes') {
+        const editedHour = updated.find(hours => hours.id === id)
+        if (editedHour) {
+          setLastEditedHours({
+            opens: editedHour.opens,
+            closes: editedHour.closes
+          })
+        }
+      }
+      
+      // Sort entries in chronological order
+      const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+      return updated.sort((a, b) => dayOrder.indexOf(a.dayOfWeek) - dayOrder.indexOf(b.dayOfWeek))
+    })
+  }, [openingHours])
 
   const removeOpeningHours = useCallback((id: string) => {
     setOpeningHours(prev => prev.filter(hours => hours.id !== id))
@@ -309,6 +459,23 @@ export function SchemaGenerator() {
     if (isOrganizationPage) {
       const { name, telephone, url } = formData
       
+      // Create clean address without latitude/longitude for Organization schema
+      const cleanOrgAddress = addresses.length > 0 ? {
+        "@type": addresses[0]["@type"],
+        ...(addresses[0].streetAddress && { "streetAddress": addresses[0].streetAddress }),
+        ...(addresses[0].addressLocality && { "addressLocality": addresses[0].addressLocality }),
+        ...(addresses[0].addressRegion && { "addressRegion": addresses[0].addressRegion }),
+        ...(addresses[0].postalCode && { "postalCode": addresses[0].postalCode }),
+        ...(addresses[0].addressCountry && { "addressCountry": addresses[0].addressCountry })
+      } : null
+      
+      // Create geo coordinates if available
+      const orgGeoCoordinates = addresses.length > 0 && addresses[0].latitude && addresses[0].longitude ? {
+        "@type": "GeoCoordinates",
+        "latitude": parseFloat(addresses[0].latitude),
+        "longitude": parseFloat(addresses[0].longitude)
+      } : null
+      
       const schema: any = {
         "@context": "https://schema.org",
         "@type": "Organization",
@@ -316,7 +483,8 @@ export function SchemaGenerator() {
         ...(name && { "name": name }),
         ...(url && { "url": url }),
         ...(telephone && { "telephone": telephone }),
-        ...(addresses.length > 0 && { "address": addresses[0] })
+        ...(cleanOrgAddress && { "address": cleanOrgAddress }),
+        ...(orgGeoCoordinates && { "geo": orgGeoCoordinates })
       }
 
       const schemaJson = JSON.stringify(schema, null, 2)
@@ -455,8 +623,7 @@ export function SchemaGenerator() {
 
     // Handle LocalBusiness type (existing logic)
     const name = formData.name
-    const { description, telephone, url, priceCurrency, lowPrice, highPrice, logoUrl,
-            contactPage, schedulerPage } = formData
+    const { description, telephone, url, logoUrl, contactPage, schedulerPage } = formData
 
     const socialLinks = socialMediaLinks.length > 0 ? socialMediaLinks.map(social => social.url).filter(url => url.trim() !== '') : undefined
 
@@ -494,6 +661,14 @@ export function SchemaGenerator() {
 
     // Use the addresses array for all addresses
     const allAddresses: Address[] = [...addresses]
+    const cleanAddresses = allAddresses.map(addr => ({
+      "@type": addr["@type"],
+      ...(addr.streetAddress && { "streetAddress": addr.streetAddress }),
+      ...(addr.addressLocality && { "addressLocality": addr.addressLocality }),
+      ...(addr.addressRegion && { "addressRegion": addr.addressRegion }),
+      ...(addr.postalCode && { "postalCode": addr.postalCode }),
+      ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
+    }))
     const allCoordinates: Coordinates[] = addresses
       .filter(addr => addr.latitude && addr.longitude)
       .map(addr => ({
@@ -525,8 +700,8 @@ export function SchemaGenerator() {
       ...(socialLinks && { "sameAs": socialLinks }),
       ...(telephone && { "telephone": telephone }),
       ...(url && { "url": url }),
-      ...(allAddresses.length === 1 && { "address": allAddresses[0] }),
-      ...(allAddresses.length > 1 && { "address": allAddresses }),
+      ...(cleanAddresses.length === 1 && { "address": cleanAddresses[0] }),
+      ...(cleanAddresses.length > 1 && { "address": cleanAddresses }),
       ...(allCoordinates.length === 1 && { "geo": allCoordinates[0] }),
       ...(allCoordinates.length > 1 && { "geo": allCoordinates }),
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
@@ -638,13 +813,13 @@ export function SchemaGenerator() {
 
                 <div className="space-y-2">
                   <Label htmlFor="url">
-                    {isSpecialtyPage ? 'URL of Specialty Page' : 
-                     isOrganizationPage ? 'URL of Page' : 
-                     isFAQPage ? 'URL of FAQ Page' : 'URL of Home Page'}
+                    {isSpecialtyPage ? 'Specialty Page URL' : 
+                     isOrganizationPage ? 'Page URL' : 
+                     isFAQPage ? 'FAQ Page URL' : 'Home Page URL'}
                   </Label>
                   <Input
                     id="url"
-                    placeholder="e.g., https://www.counselingwise.com/"
+                    placeholder="e.g., https://www.example.com/"
                     value={formData.url}
                     onChange={(e) => handleInputChange('url', e.target.value)}
                   />
@@ -665,7 +840,7 @@ export function SchemaGenerator() {
                 {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="contactPage">Contact Page</Label>
+                      <Label htmlFor="contactPage">Contact Page URL</Label>
                       <Input
                         id="contactPage"
                         placeholder="e.g., https://www.example.com/contact"
@@ -675,7 +850,7 @@ export function SchemaGenerator() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="schedulerPage">Scheduler Page</Label>
+                      <Label htmlFor="schedulerPage">Scheduler Page URL</Label>
                       <Input
                         id="schedulerPage"
                         placeholder="e.g., https://www.example.com/schedule"
@@ -721,7 +896,7 @@ export function SchemaGenerator() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="hasMap">Google Business Profile CID URL</Label>
+                      <Label htmlFor="hasMap">Google Business Profile URL</Label>
                       <Input
                         id="hasMap"
                         placeholder="e.g., https://maps.google.com/?cid=..."
@@ -768,14 +943,14 @@ export function SchemaGenerator() {
                       <div key={specialty.id} className="flex gap-2 items-center p-3 border rounded-lg">
                         <div className="flex-1">
                           <Input
-                            placeholder="Specialty name (e.g., Anxiety Therapy)"
+                            placeholder="e.g., Anxiety Therapy"
                             value={specialty.name}
                             onChange={(e) => updateSpecialty(specialty.id, 'name', e.target.value)}
                           />
                         </div>
                         <div className="flex-1">
                           <Input
-                            placeholder="URL (e.g., /anxiety-therapy)"
+                            placeholder="e.g., https://example.com/anxiety-therapy"
                             value={specialty.url}
                             onChange={(e) => updateSpecialty(specialty.id, 'url', e.target.value)}
                           />
@@ -913,7 +1088,7 @@ export function SchemaGenerator() {
               {!isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Business Addresses</Label>
+                    <Label>Addresses</Label>
                     <Button 
                       type="button"
                       onClick={addAddress}
@@ -993,29 +1168,25 @@ export function SchemaGenerator() {
                           />
                         </div>
 
-                        {!isOrganizationPage && (
-                          <>
-                            <div className="space-y-2">
-                              <Label htmlFor={`latitude-${index}`}>Latitude (Optional)</Label>
-                              <Input
-                                id={`latitude-${index}`}
-                                placeholder="e.g., 40.0682202"
-                                value={address.latitude || ''}
-                                onChange={(e) => updateAddress(index, 'latitude', e.target.value)}
-                              />
-                            </div>
+                        <div className="space-y-2">
+                          <Label htmlFor={`latitude-${index}`}>Latitude</Label>
+                          <Input
+                            id={`latitude-${index}`}
+                            placeholder="e.g., 40.0682202"
+                            value={address.latitude || ''}
+                            onChange={(e) => updateAddress(index, 'latitude', e.target.value)}
+                          />
+                        </div>
 
-                            <div className="space-y-2">
-                              <Label htmlFor={`longitude-${index}`}>Longitude (Optional)</Label>
-                              <Input
-                                id={`longitude-${index}`}
-                                placeholder="e.g., -105.1819251"
-                                value={address.longitude || ''}
-                                onChange={(e) => updateAddress(index, 'longitude', e.target.value)}
-                              />
-                            </div>
-                          </>
-                        )}
+                        <div className="space-y-2">
+                          <Label htmlFor={`longitude-${index}`}>Longitude</Label>
+                          <Input
+                            id={`longitude-${index}`}
+                            placeholder="e.g., -105.1819251"
+                            value={address.longitude || ''}
+                            onChange={(e) => updateAddress(index, 'longitude', e.target.value)}
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1034,16 +1205,20 @@ export function SchemaGenerator() {
               {!isOrganizationPage && !isFAQPage && !isSpecialtyPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Opening Hours</Label>
+                    <div>
+                      <Label>Opening Hours</Label>
+                      <p className="text-xs text-muted-foreground mt-1">Only include days that the business is open.</p>
+                    </div>
                     <Button 
                       type="button"
                       onClick={addOpeningHours}
                       variant="outline"
                       size="sm"
                       className="flex items-center gap-2"
+                      disabled={openingHours.length >= 7}
                     >
                       <Plus className="h-4 w-4" />
-                      Add Hours
+                      Add Day
                     </Button>
                   </div>
                   
@@ -1058,13 +1233,13 @@ export function SchemaGenerator() {
                               onChange={(e) => updateOpeningHours(hours.id, 'dayOfWeek', e.target.value)}
                               className="w-full p-2 border rounded-md text-sm"
                             >
+                              <option value="Sunday">Sunday</option>
                               <option value="Monday">Monday</option>
                               <option value="Tuesday">Tuesday</option>
                               <option value="Wednesday">Wednesday</option>
                               <option value="Thursday">Thursday</option>
                               <option value="Friday">Friday</option>
                               <option value="Saturday">Saturday</option>
-                              <option value="Sunday">Sunday</option>
                             </select>
                           </div>
                           <div className="space-y-1">
@@ -1078,12 +1253,19 @@ export function SchemaGenerator() {
                           </div>
                           <div className="space-y-1">
                             <Label className="text-xs">Closes</Label>
-                            <Input
-                              type="time"
-                              value={hours.closes}
-                              onChange={(e) => updateOpeningHours(hours.id, 'closes', e.target.value)}
-                              className="text-sm"
-                            />
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="time"
+                                value={hours.closes}
+                                onChange={(e) => updateOpeningHours(hours.id, 'closes', e.target.value)}
+                                className="text-sm"
+                              />
+                              {hours.opens && hours.closes && (
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {calculateDuration(hours.opens, hours.closes)}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <Button
@@ -1109,53 +1291,6 @@ export function SchemaGenerator() {
               )}
             </CardContent>
           </Card>
-
-          {/* Secondary Cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Pricing (Specialty Page Only) */}
-              {isSpecialtyPage && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Pricing Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="lowPrice">Low Price</Label>
-                    <Input
-                      id="lowPrice"
-                      placeholder="e.g., 100"
-                      value={formData.lowPrice}
-                      onChange={(e) => handleInputChange('lowPrice', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="highPrice">High Price</Label>
-                    <Input
-                      id="highPrice"
-                      placeholder="e.g., 500"
-                      value={formData.highPrice}
-                      onChange={(e) => handleInputChange('highPrice', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="priceCurrency">Price Currency</Label>
-                    <Input
-                      id="priceCurrency"
-                      placeholder="e.g., USD"
-                      value={formData.priceCurrency}
-                      onChange={(e) => handleInputChange('priceCurrency', e.target.value)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-            </div>
-          </div>
 
           {/* Generated Schema Output */}
           <Card>
