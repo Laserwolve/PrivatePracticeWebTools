@@ -959,6 +959,7 @@ export function SchemaGenerator() {
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
       ...(formData.areaServed && { "areaServed": { "@type": "AdministrativeArea", "name": formData.areaServed } }),
       ...((cidUrl || formData.hasMap) && { "hasMap": cidUrl || formData.hasMap }),
+      "priceRange": "$$",
       "parentOrganization": { "@id": `${url}/#organization` }
     }
 
