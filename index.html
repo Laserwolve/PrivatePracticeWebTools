@@ -4,13 +4,81 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Private Practice Web Tools</title>
+    <title>Private Practice Web Tools - Schema Generator, Legal Pages & More</title>
+    <meta name="description" content="Free web tools for private practice professionals. Generate schema markup, create legal pages, and optimize images for your website. Built specifically for counselors, therapists, and healthcare providers." />
+    <meta name="keywords" content="private practice, schema generator, legal pages, privacy policy, terms of service, image optimizer, web tools, counseling, therapy, healthcare" />
+    <meta name="author" content="CounselingWise" />
+    <meta name="robots" content="index, follow" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Private Practice Web Tools - Schema Generator, Legal Pages & More" />
+    <meta property="og:description" content="Free web tools for private practice professionals. Generate schema markup, create legal pages, and optimize images for your website." />
+    <meta property="og:url" content="https://laserwolve.github.io/PrivatePracticeWebTools/" />
+    <meta property="og:image" content="/images/logo.webp" />
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Private Practice Web Tools - Schema Generator, Legal Pages & More" />
+    <meta name="twitter:description" content="Free web tools for private practice professionals. Generate schema markup, create legal pages, and optimize images for your website." />
+    <meta name="twitter:image" content="/images/logo.webp" />
+    
     <link rel="icon" type="image/webp" href="/images/favicon.webp" />
+    <link rel="canonical" href="https://laserwolve.github.io/PrivatePracticeWebTools/" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="/src/main.css" rel="stylesheet" />
+    
+    <!-- Schema.org JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Private Practice Web Tools",
+      "description": "Free web tools for private practice professionals including schema generator, legal page generator, and image optimizer.",
+      "url": "https://laserwolve.github.io/PrivatePracticeWebTools/",
+      "applicationCategory": "WebApplication",
+        "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": 5,
+        "ratingCount": 1
+      },
+      "operatingSystem": "Any",
+      "browserRequirements": "Requires a modern web browser with JavaScript enabled",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "creator": {
+        "@type": "Organization",
+        "name": "CounselingWise",
+        "email": "Andrew@CounselingWise.com"
+      },
+      "featureList": [
+        "Schema Markup Generator",
+        "Legal Page Generator", 
+        "Privacy Policy Generator",
+        "Terms of Service Generator",
+        "Image Optimizer"
+      ],
+      "audience": {
+        "@type": "Audience",
+        "audienceType": "Healthcare Professionals, Counselors, Therapists, Private Practice Owners"
+      }
+    }
+    </script>
 </head>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-KNE7V7JGWZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-KNE7V7JGWZ');
+</script>
 
 <body>
     <div id="root"></div>
