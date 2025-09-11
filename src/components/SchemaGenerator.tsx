@@ -871,69 +871,7 @@ export function SchemaGenerator() {
             { "@type": "City", "name": formData.areaServed }
           ]
         }),
-        ...(availableChannel.length > 0 && { "availableChannel": availableChannel }),
-        "brand": { 
-          "@id": `${url.replace(/\/[^\/]*$/, '')}/#organization`,
-          "name": formData.name || "Practice Name"
-        },
-        "review": {
-          "@type": "Review",
-          "reviewRating": {
-            "@type": "Rating",
-            "ratingValue": 5,
-            "bestRating": 5
-          },
-          "author": {
-            "@type": "Person",
-            "name": "Practice Client"
-          }
-        },
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": 5,
-          "reviewCount": 1
-        },
-        "offers": {
-          "@type": "Offer",
-          "url": url,
-          "priceCurrency": formData.priceCurrency || "USD",
-          "price": formData.price || "500",
-          "itemCondition": "NewCondition",
-          "availability": "InStock",
-          "priceValidUntil": "2099-12-31T23:59:00Z",
-          "shippingDetails": {
-            "@type": "OfferShippingDetails",
-            "shippingRate": {
-              "@type": "MonetaryAmount",
-              "value": 0.00,
-              "currency": "USD"
-            },
-            "shippingDestination": {
-              "@type": "DefinedRegion",
-              "addressCountry": "US"
-            },
-            "deliveryTime": {
-              "@type": "ShippingDeliveryTime",
-              "handlingTime": {
-                "@type": "QuantitativeValue",
-                "minValue": 0,
-                "maxValue": 0,
-                "unitCode": "DAY"
-              },
-              "transitTime": {
-                "@type": "QuantitativeValue",
-                "minValue": 0,
-                "maxValue": 0,
-                "unitCode": "DAY"
-              }
-            }
-          },
-          "hasMerchantReturnPolicy": {
-            "@type": "MerchantReturnPolicy",
-            "returnPolicyCategory": "https://schema.org/MerchantReturnNotPermitted",
-            "applicableCountry": addresses.length > 0 ? addresses[0].addressCountry : "US"
-          }
-        }
+        ...(availableChannel.length > 0 && { "availableChannel": availableChannel })
       }
 
       setGeneratedSchema(generateSchemaHTML(schema))
