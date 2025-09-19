@@ -153,7 +153,7 @@ const COUNTRY_CODES = [
   { code: 'IS', name: 'Iceland' }
 ].sort((a, b) => a.name.localeCompare(b.name))
 
-export function SchemaGenerator() {
+export function SchemaGeneratorPage() {
   const { theme } = useTheme()
 
   // Local storage utility functions
@@ -199,6 +199,7 @@ export function SchemaGenerator() {
     hasMap: '',
     priceCurrency: 'USD',
     price: '500',
+    targetAudience: '',
   }
 
   const defaultOpeningHours = [
@@ -262,6 +263,7 @@ export function SchemaGenerator() {
   const [generatedSchema, setGeneratedSchema] = useState('')
   const [showJSONLD, setShowJSONLD] = useState(() => loadFromLocalStorage('showJSONLD', false))
   const [removeSquarespaceSchema, setRemoveSquarespaceSchema] = useState(() => loadFromLocalStorage('removeSquarespaceSchema', true))
+  const [includeNonSquarespaceMetadata, setIncludeNonSquarespaceMetadata] = useState(() => loadFromLocalStorage('includeNonSquarespaceMetadata', false))
   const [cidUrl, setCidUrl] = useState('')
 
   // URL validation utility function
@@ -406,12 +408,23 @@ export function SchemaGenerator() {
     saveToLocalStorage('removeSquarespaceSchema', removeSquarespaceSchema)
   }, [removeSquarespaceSchema, saveToLocalStorage])
 
+  useEffect(() => {
+    saveToLocalStorage('includeNonSquarespaceMetadata', includeNonSquarespaceMetadata)
+  }, [includeNonSquarespaceMetadata, saveToLocalStorage])
+
   // When removeSquarespaceSchema is toggled, adjust showJSONLD
   useEffect(() => {
     if (removeSquarespaceSchema) {
       setShowJSONLD(false)
     }
   }, [removeSquarespaceSchema])
+
+  // When includeNonSquarespaceMetadata is toggled, adjust showJSONLD
+  useEffect(() => {
+    if (includeNonSquarespaceMetadata) {
+      setShowJSONLD(false)
+    }
+  }, [includeNonSquarespaceMetadata])
 
   // Reset all fields function
   const hasDataToReset = useMemo(() => {
@@ -441,8 +454,8 @@ export function SchemaGenerator() {
                hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
       })
     
-    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true
-  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD, removeSquarespaceSchema])
+    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true || includeNonSquarespaceMetadata !== false
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD, removeSquarespaceSchema, includeNonSquarespaceMetadata])
 
   const resetAllFields = useCallback(() => {
     // Don't reset the type, keep it as currently selected
@@ -456,6 +469,7 @@ export function SchemaGenerator() {
     setOpeningHours(defaultOpeningHours)
     setShowJSONLD(false)
     setRemoveSquarespaceSchema(true)
+    setIncludeNonSquarespaceMetadata(false)
     clearLocalStorage()
     toast.success('All fields have been reset')
   }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultOpeningHours])
@@ -726,9 +740,55 @@ export function SchemaGenerator() {
     setOpeningHours(prev => prev.filter(hours => hours.id !== id))
   }, [])
 
+  // Helper function to generate metadata for non-Squarespace sites
+  const generateMetadata = useCallback(() => {
+    if (!includeNonSquarespaceMetadata) return ''
+    
+    const { name, description, logoUrl, url } = formData
+    const pageTitle = isSpecialtyPage ? 
+      `${formData.specialty}${name ? ` - ${name}` : ''}` :
+      isFAQPage ? 
+      `${name} - FAQs` :
+      name || 'Private Practice'
+    
+    const pageDescription = description || `Professional ${isSpecialtyPage ? formData.specialty : 'therapy'} services${name ? ` at ${name}` : ''}.`
+    
+    let metadata = ''
+    
+    // Basic meta tags
+    if (pageTitle) {
+      metadata += `<title>${pageTitle}</title>\n`
+      metadata += `<meta name="description" content="${pageDescription}" />\n`
+    }
+    
+    // Open Graph meta tags
+    metadata += `<meta property="og:type" content="website" />\n`
+    if (pageTitle) metadata += `<meta property="og:title" content="${pageTitle}" />\n`
+    if (pageDescription) metadata += `<meta property="og:description" content="${pageDescription}" />\n`
+    if (url) metadata += `<meta property="og:url" content="${url}" />\n`
+    if (logoUrl) metadata += `<meta property="og:image" content="${logoUrl}" />\n`
+    if (name) metadata += `<meta property="og:site_name" content="${name}" />\n`
+    
+    // Twitter Card meta tags
+    metadata += `<meta name="twitter:card" content="summary" />\n`
+    if (pageTitle) metadata += `<meta name="twitter:title" content="${pageTitle}" />\n`
+    if (pageDescription) metadata += `<meta name="twitter:description" content="${pageDescription}" />\n`
+    if (logoUrl) metadata += `<meta name="twitter:image" content="${logoUrl}" />\n`
+    
+    return metadata
+  }, [includeNonSquarespaceMetadata, formData, isSpecialtyPage, isFAQPage])
+
   // Helper function to generate complete schema HTML with optional Squarespace removal script
   const generateSchemaHTML = useCallback((schema: any) => {
     const schemaJson = JSON.stringify(schema, null, 2)
+    let output = ''
+    
+    // Add metadata if enabled
+    const metadata = generateMetadata()
+    if (metadata) {
+      output += metadata + '\n'
+    }
+    
     let schemaHTML = `<script type="application/ld+json">${schemaJson}</script>`
 
     if (removeSquarespaceSchema) {
@@ -744,8 +804,9 @@ export function SchemaGenerator() {
 </script>`
     }
 
-    return schemaHTML
-  }, [removeSquarespaceSchema])
+    output += schemaHTML
+    return output
+  }, [removeSquarespaceSchema, generateMetadata])
 
   const generateSchema = useCallback(() => {
     // Handle Organization type with simplified schema
@@ -813,7 +874,7 @@ export function SchemaGenerator() {
 
     // Handle Specialty Page (Service) type with Service schema
     if (isSpecialtyPage) {
-      const { specialty, url, description, name, logoUrl } = formData
+      const { specialty, url, description, name } = formData
       const serviceSlug = specialty.toLowerCase().replace(/\s+/g, '-')
       
       const availableChannel: any[] = []
@@ -858,12 +919,11 @@ export function SchemaGenerator() {
 
       const schema: any = {
         "@context": "https://schema.org",
-        "@type": "Product",
+        "@type": "Service",
         "@id": `${url}/#service-${serviceSlug}`,
         ...(specialty && { "name": specialty }),
         "serviceType": "Therapy and Counseling",
         ...(url && { "url": url }),
-        ...(logoUrl && { "image": logoUrl }),
         ...(description && { "description": description }),
         "provider": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#localbusiness` },
         ...(formData.areaServed && { 
@@ -871,7 +931,15 @@ export function SchemaGenerator() {
             { "@type": "City", "name": formData.areaServed }
           ]
         }),
-        ...(availableChannel.length > 0 && { "availableChannel": availableChannel })
+        ...(formData.targetAudience && { 
+          "audience": { 
+            "@type": "Audience", 
+            "audienceType": formData.targetAudience 
+          } 
+        }),
+        ...(availableChannel.length > 0 && { "availableChannel": availableChannel }),
+        "brand": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#organization` },
+        "inLanguage": "en"
       }
 
       setGeneratedSchema(generateSchemaHTML(schema))
@@ -973,10 +1041,10 @@ export function SchemaGenerator() {
     try {
       let textToCopy = generatedSchema
       if (showJSONLD) {
-        // Remove the script tags to get just the JSON-LD
+        // Remove the script tags and metadata to get just the JSON-LD
         textToCopy = generatedSchema
-          .replace(/^<script type="application\/ld\+json">\s*/, '')
-          .replace(/\s*<\/script>$/, '')
+          .replace(/^.*?<script type="application\/ld\+json">\s*/s, '')
+          .replace(/\s*<\/script>.*$/s, '')
       }
       await navigator.clipboard.writeText(textToCopy)
       toast.success('Schema copied to clipboard!')
@@ -993,7 +1061,7 @@ export function SchemaGenerator() {
     }, 300) // 300ms delay
 
     return () => clearTimeout(timeoutId)
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema])
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema, includeNonSquarespaceMetadata])
 
   return (
     <div className="space-y-6">
@@ -1062,23 +1130,14 @@ export function SchemaGenerator() {
                       />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="priceCurrency">Price Currency</Label>
-                        <Input
-                          id="priceCurrency"
-                          value={formData.priceCurrency}
-                          onChange={(e) => handleInputChange('priceCurrency', e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="price">Price (Approximation)</Label>
-                        <Input
-                          id="price"
-                          value={formData.price}
-                          onChange={(e) => handleInputChange('price', e.target.value)}
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="targetAudience">Target Audience</Label>
+                      <Input
+                        id="targetAudience"
+                        placeholder="e.g., Adults with anxiety disorders"
+                        value={formData.targetAudience}
+                        onChange={(e) => handleInputChange('targetAudience', e.target.value)}
+                      />
                     </div>
                   </>
                 )}
@@ -1598,6 +1657,14 @@ export function SchemaGenerator() {
               <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
+                  <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for Non-Squarespace sites</Label>
+                  <Switch
+                    id="include-non-squarespace-metadata"
+                    checked={includeNonSquarespaceMetadata}
+                    onCheckedChange={setIncludeNonSquarespaceMetadata}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
                   <Label htmlFor="remove-squarespace-schema" className="text-sm">Remove default Squarespace Schema</Label>
                   <Switch
                     id="remove-squarespace-schema"
@@ -1611,7 +1678,7 @@ export function SchemaGenerator() {
                     id="show-json-ld"
                     checked={showJSONLD}
                     onCheckedChange={setShowJSONLD}
-                    disabled={removeSquarespaceSchema}
+                    disabled={removeSquarespaceSchema || includeNonSquarespaceMetadata}
                   />
                 </div>
               </div>

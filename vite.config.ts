@@ -16,6 +16,21 @@ export default defineConfig({
     outDir: 'docs',
     emptyOutDir: true,
     chunkSizeWarningLimit: 700, // Increase limit to 700KB since syntax-highlighter is unavoidably large
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log statements in production
+        drop_debugger: true, // Remove debugger statements
+        pure_funcs: ['console.log', 'console.warn'], // Remove specific console methods
+        passes: 2 // Multiple passes for better compression
+      },
+      mangle: {
+        safari10: true // Fix Safari 10+ issues
+      },
+      format: {
+        comments: false // Remove all comments
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks: {

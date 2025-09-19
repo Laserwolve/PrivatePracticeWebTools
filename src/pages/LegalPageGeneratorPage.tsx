@@ -21,7 +21,7 @@ interface FormData {
   date: string
 }
 
-export function LegalPageGenerator() {
+export function LegalPageGeneratorPage() {
   // Local storage utility functions
   const saveToLocalStorage = useCallback((key: string, data: any) => {
     try {
