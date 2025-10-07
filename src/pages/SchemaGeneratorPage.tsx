@@ -478,7 +478,7 @@ export function SchemaGeneratorPage() {
     toast.success('All fields have been reset')
   }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultOpeningHours])
 
-  const handleInputChange = useCallback(async (field: string, value: string) => {
+  const handleInputChange = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     
     // Validate URL fields
@@ -486,9 +486,15 @@ export function SchemaGeneratorPage() {
     if (urlFields.includes(field)) {
       validateUrl(field, value)
     }
+  }, [validateUrl])
+
+  // Combined handler for hasMap field that handles both input change and Google Maps parsing
+  const handleHasMapChange = useCallback(async (value: string) => {
+    // First update the form data
+    handleInputChange('hasMap', value)
     
-    // If the field is hasMap (Google Business Profile URL), parse it for coordinates and CID
-    if (field === 'hasMap' && value.includes('google.com/maps')) {
+    // Then handle Google Maps URL parsing
+    if (value.includes('google.com/maps')) {
       try {
         const { latitude, longitude, cid } = await parseGoogleBusinessUrl(value)
         
@@ -513,11 +519,11 @@ export function SchemaGeneratorPage() {
         console.error('Error parsing Google Business URL:', error)
         toast.error('Error parsing Google Business Profile URL')
       }
-    } else if (field === 'hasMap') {
+    } else {
       // Clear CID URL if hasMap is cleared or not a Google Maps URL
       setCidUrl('')
     }
-  }, [parseGoogleBusinessUrl, validateUrl])
+  }, [handleInputChange, parseGoogleBusinessUrl])
 
   // Function to get the CID URL for hasMap from the user's Google Business Profile URL
   const getCidUrl = useCallback(async (url: string) => {
@@ -1059,14 +1065,7 @@ export function SchemaGeneratorPage() {
     }
   }
 
-  // Debounced schema generation for better performance
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      generateSchema()
-    }, 300) // 300ms delay
 
-    return () => clearTimeout(timeoutId)
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema, includeNonSquarespaceMetadata])
 
   return (
     <div className="space-y-6">
@@ -1291,7 +1290,7 @@ export function SchemaGeneratorPage() {
                       id="hasMap"
                       placeholder="e.g., https://www.google.com/maps/place/Business+Name/@40.0682184,-105.1819262,17z/data=!3m1!4b1!4m6!3m5!1s0x876bf1cafb263f9f:0x5a01627dae1cf2d8!8m2!3d40.0682184!4d-105.1819262!16s%2Fg%2F11fzfdydb2?entry=ttu&g_ep=EgoyMDI1MDgyNS4wIKXMDSoASAFQAw%3D%3D"
                       value={formData.hasMap}
-                      onChange={(e) => handleInputChange('hasMap', e.target.value)}
+                      onChange={(e) => handleHasMapChange(e.target.value)}
                       className={urlErrors.hasMap ? 'border-red-500 focus-visible:ring-red-500' : ''}
                     />
                     {urlErrors.hasMap && (
@@ -1693,7 +1692,10 @@ export function SchemaGeneratorPage() {
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
+              <div className="flex items-center space-x-2">
+                <Button onClick={generateSchema} variant="default">Generate Schema</Button>
+                <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for non-Squarespace Sites</Label>
