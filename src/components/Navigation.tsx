@@ -11,7 +11,7 @@ export function Navigation() {
 
   const navItems = [
     { path: '/schema-generator', label: 'Schema Generator', icon: FileCode },
-    { path: '/legal-page-generator', label: 'Legal Pages', icon: Scale },
+    { path: '/legal-page-generator', label: 'Legal Page Generator', icon: Scale },
     { path: '/image-optimizer', label: 'Image Optimizer', icon: Image },
   ]
 

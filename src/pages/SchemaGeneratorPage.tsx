@@ -200,6 +200,9 @@ export function SchemaGeneratorPage() {
     priceCurrency: 'USD',
     price: '500',
     targetAudience: '',
+    email: '',
+    founder: '',
+    priceRange: '',
   }
 
   const defaultOpeningHours = [
@@ -300,6 +303,7 @@ export function SchemaGeneratorPage() {
   const isSpecialtyPage = useMemo(() => type === 'Product', [type])
   const isOrganizationPage = useMemo(() => type === 'Organization', [type])
   const isFAQPage = useMemo(() => type === 'FAQPage', [type])
+  const isHomePage = useMemo(() => type === 'LocalBusiness', [type])
 
   // Function to parse Google Business Profile URL and extract coordinates and CID
   const parseGoogleBusinessUrl = useCallback(async (url: string) => {
@@ -946,36 +950,19 @@ export function SchemaGeneratorPage() {
       return
     }
 
-    // Handle LocalBusiness type (existing logic)
+    // Handle LocalBusiness type with @graph structure (Homepage)
     const name = formData.name
-    const { description, telephone, url, logoUrl, contactPage, schedulerPage } = formData
+    const { description, telephone, url, logoUrl, contactPage, schedulerPage, email, founder, priceRange } = formData
 
     const socialLinks = socialMediaLinks.length > 0 ? socialMediaLinks.map(social => social.url).filter(url => url.trim() !== '') : undefined
 
-    const makesOffer = specialties.length > 0 ? specialties.map((specialty, index) => ({
-      "@type": "Offer",
-      "itemOffered": {
-        "@type": "Service",
-        "@id": `${url}/#service-${specialty.name.toLowerCase().replace(/\s+/g, '-')}`,
-        "name": specialty.name,
-        "serviceType": "Therapy and Counseling",
-        "url": specialty.url,
-        "provider": { "@id": `${url}/#localbusiness` },
-        "areaServed": { "@type": "AdministrativeArea", "name": formData.areaServed || "City, State" }
-      }
-    })) : undefined
+    // Use specialties for knowsAbout array
+    const knowsAboutArray = specialties.length > 0 ? specialties.map(specialty => specialty.name).filter(name => name.trim() !== '') : []
 
-    const faqPage = faqs.length > 0 ? {
-      "@type": "FAQPage",
-      "mainEntity": faqs.map(faq => ({
-        "@type": "Question",
-        "name": faq.question,
-        "acceptedAnswer": {
-          "@type": "Answer",
-          "text": faq.answer
-        }
-      }))
-    } : undefined
+    // Parse areaServed into multiple areas if comma-separated
+    const areaServedArray = formData.areaServed ? 
+      formData.areaServed.split(',').map(area => ({ "@type": "AdministrativeArea", "name": area.trim() })) : 
+      []
 
     const openingHoursSpecification = openingHours.map(hour => ({
       "@type": "OpeningHoursSpecification",
@@ -986,56 +973,74 @@ export function SchemaGeneratorPage() {
 
     // Use the addresses array for all addresses
     const allAddresses: Address[] = [...addresses]
-    const cleanAddresses = allAddresses.map(addr => ({
-      "@type": addr["@type"],
-      ...(addr.streetAddress && { "streetAddress": addr.streetAddress }),
-      ...(addr.addressLocality && { "addressLocality": addr.addressLocality }),
-      ...(addr.addressRegion && { "addressRegion": addr.addressRegion }),
-      ...(addr.postalCode && { "postalCode": addr.postalCode }),
-      ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
-    }))
-    const allCoordinates: Coordinates[] = addresses
-      .filter(addr => addr.latitude && addr.longitude)
-      .map(addr => ({
-        "@type": "GeoCoordinates" as const,
-        latitude: addr.latitude!,
-        longitude: addr.longitude!
-      }))
+    const cleanAddress = allAddresses.length > 0 ? {
+      "@type": allAddresses[0]["@type"],
+      ...(allAddresses[0].streetAddress && { "streetAddress": allAddresses[0].streetAddress }),
+      ...(allAddresses[0].addressLocality && { "addressLocality": allAddresses[0].addressLocality }),
+      ...(allAddresses[0].addressRegion && { "addressRegion": allAddresses[0].addressRegion }),
+      ...(allAddresses[0].postalCode && { "postalCode": allAddresses[0].postalCode }),
+      ...(allAddresses[0].addressCountry && { "addressCountry": allAddresses[0].addressCountry })
+    } : null
 
-    const potentialAction = [
-      schedulerPage && {
-        "@type": "ReserveAction",
-        "target": schedulerPage,
-        "name": "Make an Appointment"
-      }
-    ].filter(Boolean)
+    const geoCoordinates = allAddresses.length > 0 && allAddresses[0].latitude && allAddresses[0].longitude ? {
+      "@type": "GeoCoordinates",
+      "latitude": parseFloat(allAddresses[0].latitude),
+      "longitude": parseFloat(allAddresses[0].longitude)
+    } : null
 
-    const schema: any = {
-      "@context": "https://schema.org",
+    // Create makesOffer for services
+    const makesOffer = specialties.length > 0 ? specialties.map(specialty => ({
+      "@type": "Service",
+      "@id": `${url}/${specialty.name.toLowerCase().replace(/\s+/g, '-')}-therapy/#service`,
+      "name": specialty.name,
+      "url": specialty.url || `${url}/${specialty.name.toLowerCase().replace(/\s+/g, '-')}-therapy`
+    })) : []
+
+    // Create Organization entity
+    const organization: any = {
+      "@type": "Organization",
+      "@id": `${url}/#org`,
+      ...(name && { "name": name }),
+      ...(url && { "url": url }),
+      ...(logoUrl && { "logo": logoUrl }),
+      ...(socialLinks && socialLinks.length > 0 && { "sameAs": socialLinks })
+    }
+
+    // Create LocalBusiness entity  
+    const localBusiness: any = {
       "@type": ["LocalBusiness", "ProfessionalService"],
       "@id": `${url}/#localbusiness`,
       ...(name && { "name": name }),
-      ...(description && { "description": description }),
-      ...(logoUrl && { "image": logoUrl }),
-      ...(socialLinks && { "sameAs": socialLinks }),
-      ...(telephone && { "telephone": telephone }),
       ...(url && { "url": url }),
-      ...(cleanAddresses.length === 1 && { "address": cleanAddresses[0] }),
-      ...(cleanAddresses.length > 1 && { "address": cleanAddresses }),
-      ...(allCoordinates.length === 1 && { "geo": allCoordinates[0] }),
-      ...(allCoordinates.length > 1 && { "geo": allCoordinates }),
+      ...(logoUrl && { "image": logoUrl }),
+      ...(telephone && { "telephone": telephone }),
+      ...(priceRange && { "priceRange": priceRange }),
+      ...(email && { "email": email }),
+      ...(founder && { "founder": founder }),
+      "parentOrganization": { "@id": `${url}/#org` },
+      ...(cleanAddress && { "address": cleanAddress }),
+      ...(geoCoordinates && { "geo": geoCoordinates }),
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
-      ...(formData.areaServed && { "areaServed": { "@type": "AdministrativeArea", "name": formData.areaServed } }),
+      ...(areaServedArray.length > 0 && { "areaServed": areaServedArray }),
+      ...(socialLinks && socialLinks.length > 0 && {
+        "sameAs": [
+          ...(cidUrl || formData.hasMap ? [cidUrl || formData.hasMap] : []),
+          ...socialLinks
+        ]
+      }),
+      ...(knowsAboutArray.length > 0 && { "knowsAbout": knowsAboutArray }),
       ...((cidUrl || formData.hasMap) && { "hasMap": cidUrl || formData.hasMap }),
-      "priceRange": "$$",
-      "parentOrganization": { "@id": `${url}/#organization` }
+      ...(makesOffer.length > 0 && { "makesOffer": makesOffer })
     }
 
-    if (potentialAction.length) schema.potentialAction = potentialAction
-    if (makesOffer) schema.makesOffer = makesOffer
+    // Create @graph structure
+    const schema = {
+      "@context": "https://schema.org",
+      "@graph": [organization, localBusiness]
+    }
 
     setGeneratedSchema(generateSchemaHTML(schema))
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, cidUrl, generateSchemaHTML])
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, isHomePage, cidUrl, generateSchemaHTML])
 
   const copyText = async () => {
     try {
@@ -1226,6 +1231,40 @@ export function SchemaGeneratorPage() {
                       onChange={(e) => handleInputChange('telephone', e.target.value)}
                     />
                   </div>
+                )}
+
+                {isHomePage && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        placeholder="e.g., intake@example.com"
+                        value={formData.email}
+                        onChange={(e) => handleInputChange('email', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="founder">Founder/Clinician</Label>
+                      <Input
+                        id="founder"
+                        placeholder="e.g., Clinician Name, LMFT"
+                        value={formData.founder}
+                        onChange={(e) => handleInputChange('founder', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="priceRange">Price Range</Label>
+                      <Input
+                        id="priceRange"
+                        placeholder="e.g., $120–$200"
+                        value={formData.priceRange}
+                        onChange={(e) => handleInputChange('priceRange', e.target.value)}
+                      />
+                    </div>
+                  </>
                 )}
 
                 {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
@@ -1657,7 +1696,7 @@ export function SchemaGeneratorPage() {
               <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for Non-Squarespace sites</Label>
+                  <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for non-Squarespace Sites</Label>
                   <Switch
                     id="include-non-squarespace-metadata"
                     checked={includeNonSquarespaceMetadata}
