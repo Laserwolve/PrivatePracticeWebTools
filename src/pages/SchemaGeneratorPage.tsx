@@ -461,6 +461,32 @@ export function SchemaGeneratorPage() {
     return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true || includeNonSquarespaceMetadata !== false
   }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD, removeSquarespaceSchema, includeNonSquarespaceMetadata])
 
+  // Memoized SyntaxHighlighter to prevent re-rendering on every keystroke
+  const memoizedSyntaxHighlighter = useMemo(() => {
+    const content = showJSONLD 
+      ? generatedSchema
+          .replace(/^<script type="application\/ld\+json">\s*/, '')
+          .replace(/\s*<\/script>$/, '')
+      : generatedSchema
+
+    return (
+      <SyntaxHighlighter
+        language={showJSONLD ? "json" : "html"}
+        style={theme === 'dark' ? oneDark : oneLight}
+        customStyle={{
+          margin: 0,
+          borderRadius: '0.5rem',
+          fontSize: '0.875rem',
+          maxHeight: '24rem',
+          overflow: 'auto'
+        }}
+        wrapLongLines
+      >
+        {content}
+      </SyntaxHighlighter>
+    )
+  }, [generatedSchema, showJSONLD, theme])
+
   const resetAllFields = useCallback(() => {
     // Don't reset the type, keep it as currently selected
     setFormData(defaultFormData)
@@ -1047,6 +1073,15 @@ export function SchemaGeneratorPage() {
 
     setGeneratedSchema(generateSchemaHTML(schema))
   }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, isHomePage, cidUrl, generateSchemaHTML])
+
+  // Debounced auto-generation for better performance
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      generateSchema()
+    }, 300) // 300ms delay
+
+    return () => clearTimeout(timeoutId)
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema, includeNonSquarespaceMetadata, generateSchema])
 
   const copyText = async () => {
     try {
@@ -1692,10 +1727,7 @@ export function SchemaGeneratorPage() {
         <CardContent>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Button onClick={generateSchema} variant="default">Generate Schema</Button>
-                <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
-              </div>
+              <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
                   <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for non-Squarespace Sites</Label>
@@ -1725,25 +1757,7 @@ export function SchemaGeneratorPage() {
               </div>
             </div>
             <div className="relative">
-              <SyntaxHighlighter
-                language={showJSONLD ? "json" : "html"}
-                style={theme === 'dark' ? oneDark : oneLight}
-                customStyle={{
-                  margin: 0,
-                  borderRadius: '0.5rem',
-                  fontSize: '0.875rem',
-                  maxHeight: '24rem',
-                  overflow: 'auto'
-                }}
-                wrapLongLines
-              >
-                {showJSONLD 
-                  ? generatedSchema
-                      .replace(/^<script type="application\/ld\+json">\s*/, '')
-                      .replace(/\s*<\/script>$/, '')
-                  : generatedSchema
-                }
-              </SyntaxHighlighter>
+              {memoizedSyntaxHighlighter}
             </div>
           </div>
         </CardContent>
