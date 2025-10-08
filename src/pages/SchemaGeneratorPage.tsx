@@ -64,6 +64,11 @@ interface SocialMedia {
   url: string
 }
 
+interface GoogleBusinessProfile {
+  id: string
+  url: string
+}
+
 // ISO-3166 Alpha-2 country codes
 const COUNTRY_CODES = [
   { code: 'US', name: 'United States' },
@@ -205,7 +210,6 @@ export function SchemaGeneratorPage() {
     description: '',
     telephone: '',
     areaServed: '',
-    hasMap: '',
     priceCurrency: 'USD',
     price: '500',
     targetAudience: '',
@@ -261,6 +265,13 @@ export function SchemaGeneratorPage() {
     }
   ]
 
+  const defaultGoogleBusinessProfiles = [
+    {
+      id: '1',
+      url: ''
+    }
+  ]
+
   // State with localStorage initialization
   const [type, setType] = useState(() => loadFromLocalStorage('type', 'LocalBusiness'))
   const [formData, setFormData] = useState(() => loadFromLocalStorage('formData', defaultFormData))
@@ -270,13 +281,13 @@ export function SchemaGeneratorPage() {
   const [specialties, setSpecialties] = useState<Specialty[]>(() => loadFromLocalStorage('specialties', defaultSpecialties))
   const [faqs, setFaqs] = useState<FAQ[]>(() => loadFromLocalStorage('faqs', defaultFaqs))
   const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMedia[]>(() => loadFromLocalStorage('socialMediaLinks', []))
+  const [googleBusinessProfiles, setGoogleBusinessProfiles] = useState<GoogleBusinessProfile[]>(() => loadFromLocalStorage('googleBusinessProfiles', defaultGoogleBusinessProfiles))
   const [openingHours, setOpeningHours] = useState<OpeningHours[]>(() => loadFromLocalStorage('openingHours', defaultOpeningHours))
   const [lastEditedHours, setLastEditedHours] = useState<{ opens: string, closes: string }>({ opens: '09:00', closes: '17:00' })
   const [generatedSchema, setGeneratedSchema] = useState('')
   const [showJSONLD, setShowJSONLD] = useState(() => loadFromLocalStorage('showJSONLD', false))
   const [removeSquarespaceSchema, setRemoveSquarespaceSchema] = useState(() => loadFromLocalStorage('removeSquarespaceSchema', true))
   const [includeNonSquarespaceMetadata, setIncludeNonSquarespaceMetadata] = useState(() => loadFromLocalStorage('includeNonSquarespaceMetadata', false))
-  const [cidUrl, setCidUrl] = useState('')
 
   // URL validation utility function
   const isValidUrl = useCallback((url: string) => {
@@ -410,6 +421,10 @@ export function SchemaGeneratorPage() {
   }, [socialMediaLinks, saveToLocalStorage])
 
   useEffect(() => {
+    saveToLocalStorage('googleBusinessProfiles', googleBusinessProfiles)
+  }, [googleBusinessProfiles, saveToLocalStorage])
+
+  useEffect(() => {
     saveToLocalStorage('openingHours', openingHours)
   }, [openingHours, saveToLocalStorage])
 
@@ -460,6 +475,11 @@ export function SchemaGeneratorPage() {
         return !defaultFaq || faq.question !== defaultFaq.question || faq.answer !== defaultFaq.answer
       })
     const hasSocialMedia = socialMediaLinks.length > 0
+    const hasNonDefaultGoogleBusinessProfiles = googleBusinessProfiles.length !== defaultGoogleBusinessProfiles.length || 
+      googleBusinessProfiles.some((profile, index) => {
+        const defaultProfile = defaultGoogleBusinessProfiles[index]
+        return !defaultProfile || profile.url !== defaultProfile.url
+      })
     const hasCustomOpeningHours = openingHours.length !== defaultOpeningHours.length || 
       openingHours.some((hour, index) => {
         const defaultHour = defaultOpeningHours[index]
@@ -467,8 +487,8 @@ export function SchemaGeneratorPage() {
                hour.opens !== defaultHour.opens || hour.closes !== defaultHour.closes
       })
     
-    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true || includeNonSquarespaceMetadata !== false
-  }, [formData, addresses, specialties, faqs, socialMediaLinks, openingHours, defaultOpeningHours, showJSONLD, removeSquarespaceSchema, includeNonSquarespaceMetadata])
+    return hasFormData || hasNonDefaultAddresses || hasNonDefaultSpecialties || hasNonDefaultFaqs || hasSocialMedia || hasNonDefaultGoogleBusinessProfiles || hasCustomOpeningHours || showJSONLD !== false || removeSquarespaceSchema !== true || includeNonSquarespaceMetadata !== false
+  }, [formData, addresses, specialties, faqs, socialMediaLinks, googleBusinessProfiles, openingHours, defaultOpeningHours, defaultGoogleBusinessProfiles, showJSONLD, removeSquarespaceSchema, includeNonSquarespaceMetadata])
 
   // Memoized SyntaxHighlighter to prevent re-rendering on every keystroke
   const memoizedSyntaxHighlighter = useMemo(() => {
@@ -505,33 +525,39 @@ export function SchemaGeneratorPage() {
     setSpecialties(defaultSpecialties)
     setFaqs(defaultFaqs)
     setSocialMediaLinks([])
+    setGoogleBusinessProfiles(defaultGoogleBusinessProfiles)
     setOpeningHours(defaultOpeningHours)
     setShowJSONLD(false)
     setRemoveSquarespaceSchema(true)
     setIncludeNonSquarespaceMetadata(false)
     clearLocalStorage()
     toast.success('All fields have been reset')
-  }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultOpeningHours])
+  }, [clearLocalStorage, defaultFormData, defaultAddresses, defaultSpecialties, defaultFaqs, defaultGoogleBusinessProfiles, defaultOpeningHours])
 
   const handleInputChange = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     
     // Validate URL fields
-    const urlFields = ['url', 'logoUrl', 'contactPage', 'schedulerPage', 'hasMap']
+    const urlFields = ['url', 'logoUrl', 'contactPage', 'schedulerPage']
     if (urlFields.includes(field)) {
       validateUrl(field, value)
     }
   }, [validateUrl])
 
-  // Combined handler for hasMap field that handles both input change and Google Maps parsing
-  const handleHasMapChange = useCallback(async (value: string) => {
-    // First update the form data
-    handleInputChange('hasMap', value)
+  // Handler for Google Business Profile URL parsing
+  const handleGoogleBusinessProfileChange = useCallback(async (id: string, value: string) => {
+    // Update the google business profile
+    setGoogleBusinessProfiles(prev => prev.map(profile => 
+      profile.id === id ? { ...profile, url: value } : profile
+    ))
+    
+    // Validate URL
+    validateUrl(`googleBusiness_${id}`, value)
     
     // Then handle Google Maps URL parsing
     if (value.includes('google.com/maps')) {
       try {
-        const { latitude, longitude, cid } = await parseGoogleBusinessUrl(value)
+        const { latitude, longitude } = await parseGoogleBusinessUrl(value)
         
         // Update the first address with the parsed coordinates
         if ((latitude && longitude)) {
@@ -543,37 +569,14 @@ export function SchemaGeneratorPage() {
             )
           )
         }
-        
-        // Update CID URL for schema generation
-        if (cid) {
-          setCidUrl(`https://www.google.com/maps?cid=${cid}`)
-        } else {
-          setCidUrl('')
-        }
       } catch (error) {
         console.error('Error parsing Google Business URL:', error)
         toast.error('Error parsing Google Business Profile URL')
       }
-    } else {
-      // Clear CID URL if hasMap is cleared or not a Google Maps URL
-      setCidUrl('')
     }
-  }, [handleInputChange, parseGoogleBusinessUrl])
+  }, [parseGoogleBusinessUrl, validateUrl])
 
-  // Function to get the CID URL for hasMap from the user's Google Business Profile URL
-  const getCidUrl = useCallback(async (url: string) => {
-    if (!url || !url.includes('google.com/maps')) {
-      return url // Return original URL if it's not a Google Maps URL
-    }
-    
-    try {
-      const { cid } = await parseGoogleBusinessUrl(url)
-      return cid ? `https://www.google.com/maps?cid=${cid}` : url
-    } catch (error) {
-      console.error('Error getting CID URL:', error)
-      return url // Return original URL on error
-    }
-  }, [parseGoogleBusinessUrl])
+
 
   // Calculate duration between opening and closing times
   const calculateDuration = useCallback((opens: string, closes: string) => {
@@ -688,6 +691,18 @@ export function SchemaGeneratorPage() {
 
   const removeSocialMedia = useCallback((id: string) => {
     setSocialMediaLinks(prev => prev.filter(social => social.id !== id))
+  }, [])
+
+  const addGoogleBusinessProfile = useCallback(() => {
+    const newProfile: GoogleBusinessProfile = {
+      id: Date.now().toString(),
+      url: ''
+    }
+    setGoogleBusinessProfiles(prev => [...prev, newProfile])
+  }, [])
+
+  const removeGoogleBusinessProfile = useCallback((id: string) => {
+    setGoogleBusinessProfiles(prev => prev.filter(profile => profile.id !== id))
   }, [])
 
   const addOpeningHours = useCallback(() => {
@@ -858,21 +873,22 @@ export function SchemaGeneratorPage() {
     if (isOrganizationPage) {
       const { name, telephone, url, logoUrl } = formData
       
-      // Create clean address without latitude/longitude for Organization schema
-      const cleanOrgAddress = addresses.length > 0 ? {
-        "@type": addresses[0]["@type"],
-        ...(addresses[0].streetAddress && { "streetAddress": addresses[0].streetAddress }),
-        ...(addresses[0].addressLocality && { "addressLocality": addresses[0].addressLocality }),
-        ...(addresses[0].addressRegion && { "addressRegion": addresses[0].addressRegion }),
-        ...(addresses[0].postalCode && { "postalCode": addresses[0].postalCode }),
-        ...(addresses[0].addressCountry && { "addressCountry": addresses[0].addressCountry })
-      } : null
+      // Create clean addresses without latitude/longitude for Organization schema
+      const cleanOrgAddresses = addresses.length > 0 ? addresses.map(addr => ({
+        "@type": addr["@type"],
+        ...(addr.streetAddress && { "streetAddress": addr.streetAddress }),
+        ...(addr.addressLocality && { "addressLocality": addr.addressLocality }),
+        ...(addr.addressRegion && { "addressRegion": addr.addressRegion }),
+        ...(addr.postalCode && { "postalCode": addr.postalCode }),
+        ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
+      })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
       
-      // Create geo coordinates if available
-      const orgGeoCoordinates = addresses.length > 0 && addresses[0].latitude && addresses[0].longitude ? {
+      // Create geo coordinates if available (use first address with coordinates)
+      const addressWithCoordinates = addresses.find(addr => addr.latitude && addr.longitude)
+      const orgGeoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
         "@type": "GeoCoordinates",
-        "latitude": parseFloat(addresses[0].latitude),
-        "longitude": parseFloat(addresses[0].longitude)
+        "latitude": parseFloat(addressWithCoordinates.latitude),
+        "longitude": parseFloat(addressWithCoordinates.longitude)
       } : null
       
       const schema: any = {
@@ -883,7 +899,9 @@ export function SchemaGeneratorPage() {
         ...(url && { "url": url }),
         ...(logoUrl && { "image": logoUrl }),
         ...(telephone && { "telephone": telephone }),
-        ...(cleanOrgAddress && { "address": cleanOrgAddress }),
+        ...(cleanOrgAddresses.length > 0 && { 
+          "address": cleanOrgAddresses.length === 1 ? cleanOrgAddresses[0] : cleanOrgAddresses 
+        }),
         ...(orgGeoCoordinates && { "geo": orgGeoCoordinates })
       }
 
@@ -925,6 +943,9 @@ export function SchemaGeneratorPage() {
       // Get social links
       const socialLinks = socialMediaLinks.length > 0 ? socialMediaLinks.map(social => social.url).filter(url => url.trim() !== '') : undefined
 
+      // Get Google Business Profile links
+      const googleBusinessLinks = googleBusinessProfiles.length > 0 ? googleBusinessProfiles.map(profile => profile.url).filter(url => url.trim() !== '') : []
+
       // Create opening hours specification
       const openingHoursSpecification = openingHours.map(hour => ({
         "@type": "OpeningHoursSpecification",
@@ -933,21 +954,22 @@ export function SchemaGeneratorPage() {
         "closes": hour.closes
       }))
 
-      // Create clean address
-      const cleanAddress = addresses.length > 0 ? {
-        "@type": addresses[0]["@type"],
-        ...(addresses[0].streetAddress && { "streetAddress": addresses[0].streetAddress }),
-        ...(addresses[0].addressLocality && { "addressLocality": addresses[0].addressLocality }),
-        ...(addresses[0].addressRegion && { "addressRegion": addresses[0].addressRegion }),
-        ...(addresses[0].postalCode && { "postalCode": addresses[0].postalCode }),
-        ...(addresses[0].addressCountry && { "addressCountry": addresses[0].addressCountry })
-      } : null
+      // Create clean addresses
+      const cleanAddresses = addresses.length > 0 ? addresses.map(addr => ({
+        "@type": addr["@type"],
+        ...(addr.streetAddress && { "streetAddress": addr.streetAddress }),
+        ...(addr.addressLocality && { "addressLocality": addr.addressLocality }),
+        ...(addr.addressRegion && { "addressRegion": addr.addressRegion }),
+        ...(addr.postalCode && { "postalCode": addr.postalCode }),
+        ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
+      })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
 
-      // Create geo coordinates
-      const geoCoordinates = addresses.length > 0 && addresses[0].latitude && addresses[0].longitude ? {
+      // Create geo coordinates (use first address with coordinates)
+      const addressWithCoordinates = addresses.find(addr => addr.latitude && addr.longitude)
+      const geoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
         "@type": "GeoCoordinates",
-        "latitude": parseFloat(addresses[0].latitude),
-        "longitude": parseFloat(addresses[0].longitude)
+        "latitude": parseFloat(addressWithCoordinates.latitude),
+        "longitude": parseFloat(addressWithCoordinates.longitude)
       } : null
 
       // Create LocalBusiness entity for specialty page
@@ -958,12 +980,14 @@ export function SchemaGeneratorPage() {
         ...(url && { "url": url.replace(/\/[^\/]*$/, '') }),
         ...(telephone && { "telephone": telephone }),
         ...(logoUrl && { "image": logoUrl }),
-        ...(cleanAddress && { "address": cleanAddress }),
+        ...(cleanAddresses.length > 0 && { 
+          "address": cleanAddresses.length === 1 ? cleanAddresses[0] : cleanAddresses 
+        }),
         ...(geoCoordinates && { "geo": geoCoordinates }),
         ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
-        ...((socialLinks && socialLinks.length > 0) || (cidUrl || formData.hasMap) ? {
+        ...((socialLinks && socialLinks.length > 0) || googleBusinessLinks.length > 0 ? {
           "sameAs": [
-            ...(cidUrl || formData.hasMap ? [cidUrl || formData.hasMap] : []),
+            ...googleBusinessLinks,
             ...(socialLinks || [])
           ]
         } : {})
@@ -980,11 +1004,7 @@ export function SchemaGeneratorPage() {
         "provider": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#localbusiness` },
         ...(formData.areaServed && { 
           "serviceArea": { "@type": "AdministrativeArea", "name": formData.areaServed }
-        }),
-        "audience": { 
-          "@type": "Audience", 
-          "audienceType": "Adults, Teens" 
-        }
+        })
       }
 
       // Create @graph structure
@@ -1003,6 +1023,9 @@ export function SchemaGeneratorPage() {
 
     const socialLinks = socialMediaLinks.length > 0 ? socialMediaLinks.map(social => social.url).filter(url => url.trim() !== '') : undefined
 
+    // Get Google Business Profile links
+    const googleBusinessLinks = googleBusinessProfiles.length > 0 ? googleBusinessProfiles.map(profile => profile.url).filter(url => url.trim() !== '') : []
+
     // Use specialties for knowsAbout array
     const knowsAboutArray = specialties.length > 0 ? specialties.map(specialty => specialty.name).filter(name => name.trim() !== '') : []
 
@@ -1020,19 +1043,20 @@ export function SchemaGeneratorPage() {
 
     // Use the addresses array for all addresses
     const allAddresses: Address[] = [...addresses]
-    const cleanAddress = allAddresses.length > 0 ? {
-      "@type": allAddresses[0]["@type"],
-      ...(allAddresses[0].streetAddress && { "streetAddress": allAddresses[0].streetAddress }),
-      ...(allAddresses[0].addressLocality && { "addressLocality": allAddresses[0].addressLocality }),
-      ...(allAddresses[0].addressRegion && { "addressRegion": allAddresses[0].addressRegion }),
-      ...(allAddresses[0].postalCode && { "postalCode": allAddresses[0].postalCode }),
-      ...(allAddresses[0].addressCountry && { "addressCountry": allAddresses[0].addressCountry })
-    } : null
+    const cleanAddresses = allAddresses.length > 0 ? allAddresses.map(addr => ({
+      "@type": addr["@type"],
+      ...(addr.streetAddress && { "streetAddress": addr.streetAddress }),
+      ...(addr.addressLocality && { "addressLocality": addr.addressLocality }),
+      ...(addr.addressRegion && { "addressRegion": addr.addressRegion }),
+      ...(addr.postalCode && { "postalCode": addr.postalCode }),
+      ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
+    })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
 
-    const geoCoordinates = allAddresses.length > 0 && allAddresses[0].latitude && allAddresses[0].longitude ? {
+    const addressWithCoordinates = allAddresses.find(addr => addr.latitude && addr.longitude)
+    const geoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
       "@type": "GeoCoordinates",
-      "latitude": parseFloat(allAddresses[0].latitude),
-      "longitude": parseFloat(allAddresses[0].longitude)
+      "latitude": parseFloat(addressWithCoordinates.latitude),
+      "longitude": parseFloat(addressWithCoordinates.longitude)
     } : null
 
     // Create makesOffer for services
@@ -1065,18 +1089,20 @@ export function SchemaGeneratorPage() {
       ...(email && { "email": email }),
       ...(founder && { "founder": founder }),
       "parentOrganization": { "@id": `${url}/#org` },
-      ...(cleanAddress && { "address": cleanAddress }),
+      ...(cleanAddresses.length > 0 && { 
+        "address": cleanAddresses.length === 1 ? cleanAddresses[0] : cleanAddresses 
+      }),
       ...(geoCoordinates && { "geo": geoCoordinates }),
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
       ...(areaServedArray.length > 0 && { "areaServed": areaServedArray }),
-      ...((socialLinks && socialLinks.length > 0) || (cidUrl || formData.hasMap) ? {
+      ...((socialLinks && socialLinks.length > 0) || googleBusinessLinks.length > 0 ? {
         "sameAs": [
-          ...(cidUrl || formData.hasMap ? [cidUrl || formData.hasMap] : []),
+          ...googleBusinessLinks,
           ...(socialLinks || [])
         ]
       } : {}),
       ...(knowsAboutArray.length > 0 && { "knowsAbout": knowsAboutArray }),
-      ...((cidUrl || formData.hasMap) && { "hasMap": cidUrl || formData.hasMap }),
+      ...(googleBusinessLinks.length > 0 && { "hasMap": googleBusinessLinks }),
       ...(makesOffer.length > 0 && { "makesOffer": makesOffer })
     }
 
@@ -1087,7 +1113,7 @@ export function SchemaGeneratorPage() {
     }
 
     setGeneratedSchema(generateSchemaHTML(schema))
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, isHomePage, cidUrl, generateSchemaHTML])
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, googleBusinessProfiles, openingHours, isOrganizationPage, isFAQPage, isSpecialtyPage, isHomePage, generateSchemaHTML])
 
   // Debounced auto-generation for better performance
   useEffect(() => {
@@ -1096,7 +1122,7 @@ export function SchemaGeneratorPage() {
     }, 300) // 300ms delay
 
     return () => clearTimeout(timeoutId)
-  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, openingHours, removeSquarespaceSchema, includeNonSquarespaceMetadata, generateSchema])
+  }, [type, formData, addresses, specialties, faqs, socialMediaLinks, googleBusinessProfiles, openingHours, removeSquarespaceSchema, includeNonSquarespaceMetadata, generateSchema])
 
   const copyText = async () => {
     try {
@@ -1331,24 +1357,7 @@ export function SchemaGeneratorPage() {
                   </>
                 )}
 
-                {!isFAQPage && (
-                  <div className="space-y-2 md:col-span-2">
-                    <SelectableLabel htmlFor="hasMap">Google Business Profile URL</SelectableLabel>
-                    <p className="text-xs text-muted-foreground">
-                      Paste the URL from the Google Business Profile on Google Maps — not the Google search results. Wait for the longitude and latitude to populate in the URL before copying.
-                    </p>
-                    <Input
-                      id="hasMap"
-                      placeholder="e.g., https://www.google.com/maps/place/Business+Name/@40.0682184,-105.1819262,17z/data=!3m1!4b1!4m6!3m5!1s0x876bf1cafb263f9f:0x5a01627dae1cf2d8!8m2!3d40.0682184!4d-105.1819262!16s%2Fg%2F11fzfdydb2?entry=ttu&g_ep=EgoyMDI1MDgyNS4wIKXMDSoASAFQAw%3D%3D"
-                      value={formData.hasMap}
-                      onChange={(e) => handleHasMapChange(e.target.value)}
-                      className={urlErrors.hasMap ? 'border-red-500 focus-visible:ring-red-500' : ''}
-                    />
-                    {urlErrors.hasMap && (
-                      <p className="text-xs text-red-600">{urlErrors.hasMap}</p>
-                    )}
-                  </div>
-                )}
+
               </div>
 
               {!isOrganizationPage && !isFAQPage && (
@@ -1473,6 +1482,62 @@ export function SchemaGeneratorPage() {
                     {socialMediaLinks.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                         <p>No URLs added yet.</p>
+                        <p className="text-sm">Click "Add URL" to get started.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Google Business Profile URLs Section */}
+              {!isFAQPage && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <SelectableLabel>Google Business Profile URLs</SelectableLabel>
+                      <p className="text-xs text-muted-foreground mt-1">Paste the URL from the Google Business Profile on Google Maps — not the Google search results. Wait for the longitude and latitude to populate in the URL before copying.</p>
+                    </div>
+                    <Button 
+                      type="button"
+                      onClick={addGoogleBusinessProfile}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add URL
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {googleBusinessProfiles.map((profile) => (
+                      <div key={profile.id} className="flex gap-2 items-start p-3 border rounded-lg">
+                        <div className="flex-1 space-y-1">
+                          <Input
+                            placeholder="e.g., https://www.google.com/maps/place/Business+Name/@40.0682184,-105.1819262,17z/data=!3m1!4b1!4m6!3m5!1s0x876bf1cafb263f9f:0x5a01627dae1cf2d8!8m2!3d40.0682184!4d-105.1819262!16s%2Fg%2F11fzfdydb2?entry=ttu&g_ep=EgoyMDI1MDgyNS4wIKXMDSoASAFQAw%3D%3D"
+                            value={profile.url}
+                            onChange={(e) => handleGoogleBusinessProfileChange(profile.id, e.target.value)}
+                            className={urlErrors[`googleBusiness_${profile.id}`] ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                          />
+                          {urlErrors[`googleBusiness_${profile.id}`] && (
+                            <p className="text-xs text-red-600">{urlErrors[`googleBusiness_${profile.id}`]}</p>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={() => removeGoogleBusinessProfile(profile.id)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    
+                    {googleBusinessProfiles.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
+                        <p>No Google Business Profile URLs added yet.</p>
                         <p className="text-sm">Click "Add URL" to get started.</p>
                       </div>
                     )}
