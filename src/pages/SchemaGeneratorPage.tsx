@@ -13,6 +13,15 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight, oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useTheme } from '@/hooks/use-theme'
 import { Plus, X } from 'lucide-react'
+import { ScrollFadeIn } from '@/components/ScrollFadeIn'
+
+// CSS to enable text selection for labels
+const labelSelectableStyle = { userSelect: 'text' as const }
+
+// Custom selectable Label component
+const SelectableLabel = ({ children, ...props }: React.ComponentProps<typeof Label>) => (
+  <Label {...props} style={labelSelectableStyle}>{children}</Label>
+)
 
 interface Address {
   "@type": string
@@ -908,74 +917,80 @@ export function SchemaGeneratorPage() {
       return
     }
 
-    // Handle Specialty Page (Service) type with Service schema
+    // Handle Specialty Page (Service) type with @graph structure
     if (isSpecialtyPage) {
-      const { specialty, url, description, name } = formData
+      const { specialty, url, description, name, telephone, logoUrl } = formData
       const serviceSlug = specialty.toLowerCase().replace(/\s+/g, '-')
       
-      const availableChannel: any[] = []
-      
-      // Add in-person channel if addresses exist
-      if (addresses.length > 0) {
-        const address = addresses[0]
-        availableChannel.push({
-          "@type": "ServiceChannel",
-          "name": "In-person",
-          "serviceLocation": {
-            "@type": "Place",
-            "name": name || "Practice Name",
-            "address": {
-              "@type": "PostalAddress",
-              "streetAddress": address.streetAddress,
-              "addressLocality": address.addressLocality,
-              "addressRegion": address.addressRegion,
-              "postalCode": address.postalCode,
-              "addressCountry": "US"
-            },
-            ...(address.latitude && address.longitude && {
-              "geo": {
-                "@type": "GeoCoordinates",
-                "latitude": parseFloat(address.latitude),
-                "longitude": parseFloat(address.longitude)
-              }
-            })
-          }
-        })
-      }
-      
-      // Add telehealth channel if scheduler page exists
-      if (formData.schedulerPage) {
-        availableChannel.push({
-          "@type": "ServiceChannel",
-          "name": "Telehealth",
-          "serviceUrl": formData.schedulerPage,
-          "availableLanguage": ["English"]
-        })
+      // Get social links
+      const socialLinks = socialMediaLinks.length > 0 ? socialMediaLinks.map(social => social.url).filter(url => url.trim() !== '') : undefined
+
+      // Create opening hours specification
+      const openingHoursSpecification = openingHours.map(hour => ({
+        "@type": "OpeningHoursSpecification",
+        "dayOfWeek": hour.dayOfWeek,
+        "opens": hour.opens,
+        "closes": hour.closes
+      }))
+
+      // Create clean address
+      const cleanAddress = addresses.length > 0 ? {
+        "@type": addresses[0]["@type"],
+        ...(addresses[0].streetAddress && { "streetAddress": addresses[0].streetAddress }),
+        ...(addresses[0].addressLocality && { "addressLocality": addresses[0].addressLocality }),
+        ...(addresses[0].addressRegion && { "addressRegion": addresses[0].addressRegion }),
+        ...(addresses[0].postalCode && { "postalCode": addresses[0].postalCode }),
+        ...(addresses[0].addressCountry && { "addressCountry": addresses[0].addressCountry })
+      } : null
+
+      // Create geo coordinates
+      const geoCoordinates = addresses.length > 0 && addresses[0].latitude && addresses[0].longitude ? {
+        "@type": "GeoCoordinates",
+        "latitude": parseFloat(addresses[0].latitude),
+        "longitude": parseFloat(addresses[0].longitude)
+      } : null
+
+      // Create LocalBusiness entity for specialty page
+      const localBusiness: any = {
+        "@type": ["LocalBusiness", "ProfessionalService"],
+        "@id": `${url.replace(/\/[^\/]*$/, '')}/#localbusiness`,
+        ...(name && { "name": name }),
+        ...(url && { "url": url.replace(/\/[^\/]*$/, '') }),
+        ...(telephone && { "telephone": telephone }),
+        ...(logoUrl && { "image": logoUrl }),
+        ...(cleanAddress && { "address": cleanAddress }),
+        ...(geoCoordinates && { "geo": geoCoordinates }),
+        ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
+        ...((socialLinks && socialLinks.length > 0) || (cidUrl || formData.hasMap) ? {
+          "sameAs": [
+            ...(cidUrl || formData.hasMap ? [cidUrl || formData.hasMap] : []),
+            ...(socialLinks || [])
+          ]
+        } : {})
       }
 
-      const schema: any = {
-        "@context": "https://schema.org",
+      // Create Service entity
+      const service: any = {
         "@type": "Service",
-        "@id": `${url}/#service-${serviceSlug}`,
+        "@id": `${url}/#service`,
         ...(specialty && { "name": specialty }),
-        "serviceType": "Therapy and Counseling",
-        ...(url && { "url": url }),
+        ...(specialty && { "serviceType": specialty.replace(/\s+Therapy$/i, '').replace(/\s+/g, ' ') + " Counseling" }),
         ...(description && { "description": description }),
+        ...(url && { "url": url }),
         "provider": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#localbusiness` },
         ...(formData.areaServed && { 
-          "areaServed": [
-            { "@type": "City", "name": formData.areaServed }
-          ]
+          "serviceArea": { "@type": "AdministrativeArea", "name": formData.areaServed }
         }),
-        ...(formData.targetAudience && { 
-          "audience": { 
-            "@type": "Audience", 
-            "audienceType": formData.targetAudience 
-          } 
-        }),
-        ...(availableChannel.length > 0 && { "availableChannel": availableChannel }),
-        "brand": { "@id": `${url.replace(/\/[^\/]*$/, '')}/#organization` },
-        "inLanguage": "en"
+        "audience": { 
+          "@type": "Audience", 
+          "audienceType": "Adults, Teens" 
+        }
+      }
+
+      // Create @graph structure
+      const schema = {
+        "@context": "https://schema.org",
+        "@graph": [localBusiness, service]
       }
 
       setGeneratedSchema(generateSchemaHTML(schema))
@@ -1054,12 +1069,12 @@ export function SchemaGeneratorPage() {
       ...(geoCoordinates && { "geo": geoCoordinates }),
       ...(openingHoursSpecification.length > 0 && { "openingHoursSpecification": openingHoursSpecification }),
       ...(areaServedArray.length > 0 && { "areaServed": areaServedArray }),
-      ...(socialLinks && socialLinks.length > 0 && {
+      ...((socialLinks && socialLinks.length > 0) || (cidUrl || formData.hasMap) ? {
         "sameAs": [
           ...(cidUrl || formData.hasMap ? [cidUrl || formData.hasMap] : []),
-          ...socialLinks
+          ...(socialLinks || [])
         ]
-      }),
+      } : {}),
       ...(knowsAboutArray.length > 0 && { "knowsAbout": knowsAboutArray }),
       ...((cidUrl || formData.hasMap) && { "hasMap": cidUrl || formData.hasMap }),
       ...(makesOffer.length > 0 && { "makesOffer": makesOffer })
@@ -1105,7 +1120,8 @@ export function SchemaGeneratorPage() {
   return (
     <div className="space-y-6">
       {/* Basic Information - Full Width */}
-      <Card>
+      <ScrollFadeIn>
+        <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Information</CardTitle>
@@ -1145,7 +1161,7 @@ export function SchemaGeneratorPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="type">Type</Label>
+                <SelectableLabel htmlFor="type">Type</SelectableLabel>
                 <Select value={type} onValueChange={setType}>
                   <SelectTrigger>
                     <SelectValue />
@@ -1160,7 +1176,7 @@ export function SchemaGeneratorPage() {
               </div>                {isSpecialtyPage && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="specialty">Specialty Name</Label>
+                      <SelectableLabel htmlFor="specialty">Specialty Name</SelectableLabel>
                       <Input
                         id="specialty"
                         placeholder="e.g., Anxiety Therapy"
@@ -1170,7 +1186,7 @@ export function SchemaGeneratorPage() {
                     </div>
                     
                     <div className="space-y-2">
-                      <Label htmlFor="targetAudience">Target Audience</Label>
+                      <SelectableLabel htmlFor="targetAudience">Target Audience</SelectableLabel>
                       <Input
                         id="targetAudience"
                         placeholder="e.g., Adults with anxiety disorders"
@@ -1182,11 +1198,11 @@ export function SchemaGeneratorPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="url">
+                  <SelectableLabel htmlFor="url">
                     {isSpecialtyPage ? 'Specialty Page URL' : 
                      isOrganizationPage ? 'Page URL' : 
                      isFAQPage ? 'FAQ Page URL' : 'Home Page URL'}
-                  </Label>
+                  </SelectableLabel>
                   <Input
                     id="url"
                     placeholder="e.g., https://www.example.com/"
@@ -1200,7 +1216,7 @@ export function SchemaGeneratorPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="logoUrl">Logo URL</Label>
+                  <SelectableLabel htmlFor="logoUrl">Logo URL</SelectableLabel>
                   <Input
                     id="logoUrl"
                     placeholder="e.g., https://www.example.com/logo.png"
@@ -1216,7 +1232,7 @@ export function SchemaGeneratorPage() {
                 {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="contactPage">Contact Page URL</Label>
+                      <SelectableLabel htmlFor="contactPage">Contact Page URL</SelectableLabel>
                       <Input
                         id="contactPage"
                         placeholder="e.g., https://www.example.com/contact"
@@ -1230,7 +1246,7 @@ export function SchemaGeneratorPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="schedulerPage">Scheduler Page URL</Label>
+                      <SelectableLabel htmlFor="schedulerPage">Scheduler Page URL</SelectableLabel>
                       <Input
                         id="schedulerPage"
                         placeholder="e.g., https://www.example.com/schedule"
@@ -1246,7 +1262,7 @@ export function SchemaGeneratorPage() {
                 )}
 
                 <div className="space-y-2">
-                  <Label htmlFor="name">Business Name</Label>
+                  <SelectableLabel htmlFor="name">Business Name</SelectableLabel>
                   <Input
                     id="name"
                     placeholder="e.g., John Doe Clinic"
@@ -1257,7 +1273,7 @@ export function SchemaGeneratorPage() {
 
                 {!isFAQPage && (
                   <div className="space-y-2">
-                    <Label htmlFor="telephone">Phone</Label>
+                    <SelectableLabel htmlFor="telephone">Phone</SelectableLabel>
                     <Input
                       id="telephone"
                       placeholder="e.g., (303) 209-1832"
@@ -1270,7 +1286,7 @@ export function SchemaGeneratorPage() {
                 {isHomePage && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
+                      <SelectableLabel htmlFor="email">Email</SelectableLabel>
                       <Input
                         id="email"
                         placeholder="e.g., intake@example.com"
@@ -1280,7 +1296,7 @@ export function SchemaGeneratorPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="founder">Founder/Clinician</Label>
+                      <SelectableLabel htmlFor="founder">Founder/Clinician</SelectableLabel>
                       <Input
                         id="founder"
                         placeholder="e.g., Clinician Name, LMFT"
@@ -1290,7 +1306,7 @@ export function SchemaGeneratorPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="priceRange">Price Range</Label>
+                      <SelectableLabel htmlFor="priceRange">Price Range</SelectableLabel>
                       <Input
                         id="priceRange"
                         placeholder="e.g., $120–$200"
@@ -1304,7 +1320,7 @@ export function SchemaGeneratorPage() {
                 {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                   <>
                     <div className="space-y-2">
-                      <Label htmlFor="areaServed">Area Served</Label>
+                      <SelectableLabel htmlFor="areaServed">Area Served</SelectableLabel>
                       <Input
                         id="areaServed"
                         placeholder="e.g., Boulder, CO"
@@ -1317,7 +1333,7 @@ export function SchemaGeneratorPage() {
 
                 {!isFAQPage && (
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="hasMap">Google Business Profile URL</Label>
+                    <SelectableLabel htmlFor="hasMap">Google Business Profile URL</SelectableLabel>
                     <p className="text-xs text-muted-foreground">
                       Paste the URL from the Google Business Profile on Google Maps — not the Google search results. Wait for the longitude and latitude to populate in the URL before copying.
                     </p>
@@ -1337,7 +1353,7 @@ export function SchemaGeneratorPage() {
 
               {!isOrganizationPage && !isFAQPage && (
                 <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
+                  <SelectableLabel htmlFor="description">Description</SelectableLabel>
                   <Textarea
                     id="description"
                     placeholder="A description of the practice or specialty page"
@@ -1352,7 +1368,7 @@ export function SchemaGeneratorPage() {
               {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Specialties</Label>
+                    <SelectableLabel>Specialties</SelectableLabel>
                     <Button 
                       type="button"
                       onClick={addSpecialty}
@@ -1408,11 +1424,14 @@ export function SchemaGeneratorPage() {
                 </div>
               )}
 
-              {/* Social Media Section */}
+              {/* Other URLs Section */}
               {!isSpecialtyPage && !isOrganizationPage && !isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Social Media URLs</Label>
+                    <div>
+                      <SelectableLabel>Other URLs</SelectableLabel>
+                      <p className="text-xs text-muted-foreground mt-1">Include URLs to other websites that related to this practice (Social media pages, directory listings, etc.)</p>
+                    </div>
                     <Button 
                       type="button"
                       onClick={addSocialMedia}
@@ -1421,7 +1440,7 @@ export function SchemaGeneratorPage() {
                       className="flex items-center gap-2"
                     >
                       <Plus className="h-4 w-4" />
-                      Add Social Media
+                      Add URL
                     </Button>
                   </div>
                   
@@ -1430,7 +1449,7 @@ export function SchemaGeneratorPage() {
                       <div key={social.id} className="flex gap-2 items-start p-3 border rounded-lg">
                         <div className="flex-1 space-y-1">
                           <Input
-                            placeholder="Social media URL (e.g., https://facebook.com/yourpractice)"
+                            placeholder="URL (e.g., https://facebook.com/yourpractice, https://psychologytoday.com/profile)"
                             value={social.url}
                             onChange={(e) => updateSocialMedia(social.id, e.target.value)}
                             className={urlErrors[`social_${social.id}`] ? 'border-red-500 focus-visible:ring-red-500' : ''}
@@ -1453,8 +1472,8 @@ export function SchemaGeneratorPage() {
                     
                     {socialMediaLinks.length === 0 && (
                       <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
-                        <p>No social media links added yet.</p>
-                        <p className="text-sm">Click "Add Social Media" to get started.</p>
+                        <p>No URLs added yet.</p>
+                        <p className="text-sm">Click "Add URL" to get started.</p>
                       </div>
                     )}
                   </div>
@@ -1465,7 +1484,7 @@ export function SchemaGeneratorPage() {
               {isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>FAQs</Label>
+                    <SelectableLabel>FAQs</SelectableLabel>
                     <Button 
                       type="button"
                       onClick={addFAQ}
@@ -1523,7 +1542,7 @@ export function SchemaGeneratorPage() {
               {!isFAQPage && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <Label>Addresses</Label>
+                    <SelectableLabel>Addresses</SelectableLabel>
                     <Button 
                       type="button"
                       onClick={addAddress}
@@ -1554,7 +1573,7 @@ export function SchemaGeneratorPage() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor={`streetAddress-${index}`}>Street Address</Label>
+                          <SelectableLabel htmlFor={`streetAddress-${index}`}>Street Address</SelectableLabel>
                           <Input
                             id={`streetAddress-${index}`}
                             placeholder="e.g., 7345 Buckingham Rd"
@@ -1564,7 +1583,7 @@ export function SchemaGeneratorPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`addressLocality-${index}`}>City</Label>
+                          <SelectableLabel htmlFor={`addressLocality-${index}`}>City</SelectableLabel>
                           <Input
                             id={`addressLocality-${index}`}
                             placeholder="e.g., Boulder"
@@ -1574,7 +1593,7 @@ export function SchemaGeneratorPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`addressRegion-${index}`}>State</Label>
+                          <SelectableLabel htmlFor={`addressRegion-${index}`}>State</SelectableLabel>
                           <Input
                             id={`addressRegion-${index}`}
                             placeholder="e.g., CO"
@@ -1584,7 +1603,7 @@ export function SchemaGeneratorPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`postalCode-${index}`}>Postal Code</Label>
+                          <SelectableLabel htmlFor={`postalCode-${index}`}>Postal Code</SelectableLabel>
                           <Input
                             id={`postalCode-${index}`}
                             placeholder="e.g., 80301"
@@ -1594,7 +1613,7 @@ export function SchemaGeneratorPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor={`addressCountry-${index}`}>Country</Label>
+                          <SelectableLabel htmlFor={`addressCountry-${index}`}>Country</SelectableLabel>
                           <Select
                             value={address.addressCountry}
                             onValueChange={(value) => updateAddress(index, 'addressCountry', value)}
@@ -1630,7 +1649,7 @@ export function SchemaGeneratorPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label>Opening Hours</Label>
+                      <SelectableLabel>Opening Hours</SelectableLabel>
                       <p className="text-xs text-muted-foreground mt-1">Only include days that the business is open.</p>
                     </div>
                     <Button 
@@ -1651,7 +1670,7 @@ export function SchemaGeneratorPage() {
                       <div key={hours.id} className="flex items-center gap-3 p-3 border rounded-lg">
                         <div className="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
                           <div className="space-y-1">
-                            <Label className="text-xs">Day</Label>
+                            <SelectableLabel className="text-xs">Day</SelectableLabel>
                             <select
                               value={hours.dayOfWeek}
                               onChange={(e) => updateOpeningHours(hours.id, 'dayOfWeek', e.target.value)}
@@ -1667,7 +1686,7 @@ export function SchemaGeneratorPage() {
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Opens</Label>
+                            <SelectableLabel className="text-xs">Opens</SelectableLabel>
                             <Input
                               type="time"
                               value={hours.opens}
@@ -1676,7 +1695,7 @@ export function SchemaGeneratorPage() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-xs">Closes</Label>
+                            <SelectableLabel className="text-xs">Closes</SelectableLabel>
                             <div className="flex items-center gap-2">
                               <Input
                                 type="time"
@@ -1715,9 +1734,11 @@ export function SchemaGeneratorPage() {
               )}
             </CardContent>
           </Card>
+      </ScrollFadeIn>
 
           {/* Generated Schema Output */}
-          <Card>
+      <ScrollFadeIn delay={200}>
+        <Card>
             <CardHeader>
               <CardTitle>Generated Schema</CardTitle>
               {/* <CardDescription>
@@ -1730,7 +1751,7 @@ export function SchemaGeneratorPage() {
               <Button onClick={copyText} variant="outline">Copy to Clipboard</Button>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for non-Squarespace Sites</Label>
+                  <SelectableLabel htmlFor="include-non-squarespace-metadata" className="text-sm">Include Metadata for non-Squarespace Sites</SelectableLabel>
                   <Switch
                     id="include-non-squarespace-metadata"
                     checked={includeNonSquarespaceMetadata}
@@ -1738,7 +1759,7 @@ export function SchemaGeneratorPage() {
                   />
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="remove-squarespace-schema" className="text-sm">Remove default Squarespace Schema</Label>
+                  <SelectableLabel htmlFor="remove-squarespace-schema" className="text-sm">Remove default Squarespace Schema</SelectableLabel>
                   <Switch
                     id="remove-squarespace-schema"
                     checked={removeSquarespaceSchema}
@@ -1746,7 +1767,7 @@ export function SchemaGeneratorPage() {
                   />
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Label htmlFor="show-json-ld" className="text-sm">Remove HTML Wrapper</Label>
+                  <SelectableLabel htmlFor="show-json-ld" className="text-sm">Remove HTML Wrapper</SelectableLabel>
                   <Switch
                     id="show-json-ld"
                     checked={showJSONLD}
@@ -1762,6 +1783,7 @@ export function SchemaGeneratorPage() {
           </div>
         </CardContent>
       </Card>
+      </ScrollFadeIn>
     </div>
   )
 }

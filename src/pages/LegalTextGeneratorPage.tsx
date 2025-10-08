@@ -7,6 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Switch } from '@/components/ui/switch'
 import { toast } from 'sonner'
+import { ScrollFadeIn } from '@/components/ScrollFadeIn'
+
+// CSS to enable text selection for labels
+const labelSelectableStyle = { userSelect: 'text' as const }
+
+// Custom selectable Label component
+const SelectableLabel = ({ children, ...props }: React.ComponentProps<typeof Label>) => (
+  <Label {...props} style={labelSelectableStyle}>{children}</Label>
+)
 
 interface FormData {
   companyName: string
@@ -21,11 +30,11 @@ interface FormData {
   date: string
 }
 
-export function LegalPageGeneratorPage() {
+export function LegalTextGeneratorPage() {
   // Local storage utility functions
   const saveToLocalStorage = useCallback((key: string, data: any) => {
     try {
-      localStorage.setItem(`legalPageGenerator_${key}`, JSON.stringify(data))
+      localStorage.setItem(`legalTextGenerator_${key}`, JSON.stringify(data))
     } catch (error) {
       console.warn('Failed to save to localStorage:', error)
     }
@@ -33,7 +42,7 @@ export function LegalPageGeneratorPage() {
 
   const loadFromLocalStorage = useCallback((key: string, defaultValue: any) => {
     try {
-      const stored = localStorage.getItem(`legalPageGenerator_${key}`)
+      const stored = localStorage.getItem(`legalTextGenerator_${key}`)
       return stored ? JSON.parse(stored) : defaultValue
     } catch (error) {
       console.warn('Failed to load from localStorage:', error)
@@ -43,7 +52,7 @@ export function LegalPageGeneratorPage() {
 
   const clearLocalStorage = useCallback(() => {
     try {
-      const keys = Object.keys(localStorage).filter(key => key.startsWith('legalPageGenerator_'))
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('legalTextGenerator_'))
       keys.forEach(key => localStorage.removeItem(key))
     } catch (error) {
       console.warn('Failed to clear localStorage:', error)
@@ -304,11 +313,38 @@ export function LegalPageGeneratorPage() {
 
   const copyText = async () => {
     try {
-      await navigator.clipboard.writeText(generatedContent)
-      toast.success('Legal page content copied to clipboard!')
+      if (showRawHTML) {
+        // If showing raw HTML, copy as plain text
+        await navigator.clipboard.writeText(generatedContent)
+      } else {
+        // If showing formatted content, copy as rich text
+        const htmlContent = generatedContent
+        
+        // Create a temporary div to convert HTML to plain text as fallback
+        const tempDiv = document.createElement('div')
+        tempDiv.innerHTML = htmlContent
+        const plainText = tempDiv.textContent || tempDiv.innerText || ''
+        
+        // Use the modern Clipboard API to copy both HTML and plain text
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([htmlContent], { type: 'text/html' }),
+            'text/plain': new Blob([plainText], { type: 'text/plain' })
+          })
+        ])
+      }
+      
+      const contentType = showRawHTML ? 'HTML code' : 'formatted content'
+      toast.success(`Legal page ${contentType} copied to clipboard!`)
     } catch (err) {
-      toast.error('Failed to copy to clipboard')
-      console.error('Failed to copy: ', err)
+      // Fallback to plain text if rich text copying fails
+      try {
+        await navigator.clipboard.writeText(generatedContent)
+        toast.success('Legal page content copied to clipboard as plain text!')
+      } catch (fallbackErr) {
+        toast.error('Failed to copy to clipboard')
+        console.error('Failed to copy: ', fallbackErr)
+      }
     }
   }
 
@@ -319,7 +355,8 @@ export function LegalPageGeneratorPage() {
   return (
     <div className="space-y-6">
       {/* Form */}
-      <Card>
+      <ScrollFadeIn>
+        <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>Page Information</CardTitle>
@@ -362,7 +399,7 @@ export function LegalPageGeneratorPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="pageType">Page Type</Label>
+              <SelectableLabel htmlFor="pageType">Page Type</SelectableLabel>
               <Select value={pageType} onValueChange={setPageType}>
                 <SelectTrigger>
                   <SelectValue />
@@ -376,7 +413,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="companyName">Company Name</Label>
+              <SelectableLabel htmlFor="companyName">Company Name</SelectableLabel>
               <Input
                 id="companyName"
                 value={formData.companyName}
@@ -386,7 +423,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address1">Address Line 1</Label>
+              <SelectableLabel htmlFor="address1">Address Line 1</SelectableLabel>
               <Input
                 id="address1"
                 value={formData.address1}
@@ -396,7 +433,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address2">Address Line 2</Label>
+              <SelectableLabel htmlFor="address2">Address Line 2</SelectableLabel>
               <Input
                 id="address2"
                 value={formData.address2}
@@ -406,7 +443,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="city">City</Label>
+              <SelectableLabel htmlFor="city">City</SelectableLabel>
               <Input
                 id="city"
                 value={formData.city}
@@ -416,7 +453,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="state">State</Label>
+              <SelectableLabel htmlFor="state">State</SelectableLabel>
               <Input
                 id="state"
                 value={formData.state}
@@ -426,7 +463,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="postalCode">Postal Code</Label>
+              <SelectableLabel htmlFor="postalCode">Postal Code</SelectableLabel>
               <Input
                 id="postalCode"
                 value={formData.postalCode}
@@ -436,7 +473,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="country">Country</Label>
+              <SelectableLabel htmlFor="country">Country</SelectableLabel>
               <Input
                 id="country"
                 value={formData.country}
@@ -446,7 +483,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="websiteUrl">Website URL</Label>
+              <SelectableLabel htmlFor="websiteUrl">Website URL</SelectableLabel>
               <Input
                 id="websiteUrl"
                 type="url"
@@ -457,7 +494,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="contactUrl">Contact Page URL</Label>
+              <SelectableLabel htmlFor="contactUrl">Contact Page URL</SelectableLabel>
               <Input
                 id="contactUrl"
                 type="url"
@@ -468,7 +505,7 @@ export function LegalPageGeneratorPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="date">Date</Label>
+              <SelectableLabel htmlFor="date">Date</SelectableLabel>
               <Input
                 id="date"
                 type="date"
@@ -500,7 +537,7 @@ export function LegalPageGeneratorPage() {
                 Copy to Clipboard
               </Button>
               <div className="flex items-center space-x-2">
-                <Label htmlFor="show-raw-html" className="text-sm">Show Raw HTML</Label>
+                <SelectableLabel htmlFor="show-raw-html" className="text-sm">Show Raw HTML</SelectableLabel>
                 <Switch
                   id="show-raw-html"
                   checked={showRawHTML}
@@ -581,6 +618,7 @@ export function LegalPageGeneratorPage() {
           </div>
         </CardContent>
       </Card>
+      </ScrollFadeIn>
     </div>
   )
 }

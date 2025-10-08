@@ -2,15 +2,17 @@ import React, { Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import { Navigation } from '@/components/Navigation'
+import { ScrollToTop } from '@/components/ScrollToTop'
 
 // Lazy load page components
 const SchemaGeneratorPage = lazy(() => import('@/pages/SchemaGeneratorPage').then(m => ({ default: m.SchemaGeneratorPage })))
-const LegalPageGeneratorPage = lazy(() => import('@/pages/LegalPageGeneratorPage').then(m => ({ default: m.LegalPageGeneratorPage })))
+const LegalTextGeneratorPage = lazy(() => import('@/pages/LegalTextGeneratorPage').then(m => ({ default: m.LegalTextGeneratorPage })))
 const ImageOptimizerPage = lazy(() => import('@/pages/ImageOptimizerPage').then(m => ({ default: m.ImageOptimizerPage })))
 
 function App() {
   return (
     <Router>
+      <ScrollToTop />
       <div className="min-h-screen bg-background text-foreground">
         <Navigation />
         
@@ -23,7 +25,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Navigate to="/schema-generator" replace />} />
               <Route path="/schema-generator" element={<SchemaGeneratorPage />} />
-              <Route path="/legal-page-generator" element={<LegalPageGeneratorPage />} />
+              <Route path="/legal-text-generator" element={<LegalTextGeneratorPage />} />
               <Route path="/image-optimizer" element={<ImageOptimizerPage />} />
             </Routes>
           </Suspense>

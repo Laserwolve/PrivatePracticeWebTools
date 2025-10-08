@@ -7,6 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import JSZip from 'jszip'
+import { ScrollFadeIn } from '@/components/ScrollFadeIn'
+
+// CSS to enable text selection for labels
+const labelSelectableStyle = { userSelect: 'text' as const }
+
+// Custom selectable Label component
+const SelectableLabel = ({ children, ...props }: React.ComponentProps<typeof Label>) => (
+  <Label {...props} style={labelSelectableStyle}>{children}</Label>
+)
 
 type InputMode = 'urls' | 'files'
 
@@ -69,10 +78,40 @@ export function ImageOptimizerPage() {
   }
 
   const parseUrls = (urlText: string): string[] => {
-    return urlText
-      .split('\n')
-      .map(url => url.trim())
-      .filter(url => url.length > 0 && (url.startsWith('http://') || url.startsWith('https://')))
+    const lines = urlText.split('\n').map(line => line.trim()).filter(line => line.length > 0)
+    
+    // Check if this looks like Screaming Frog data (tab-separated with multiple columns)
+    const isScreamingFrogData = lines.some(line => line.includes('\t') && line.split('\t').length >= 3)
+    
+    if (isScreamingFrogData) {
+      // Parse Screaming Frog format: URL\tContent-Type\tSize\t...
+      return lines
+        .map(line => {
+          const columns = line.split('\t')
+          if (columns.length >= 3) {
+            const url = columns[0].trim()
+            const contentType = columns[1].trim()
+            const sizeStr = columns[2].trim()
+            
+            // Only process image URLs
+            if (!contentType.startsWith('image/')) return null
+            
+            // Only process valid HTTP/HTTPS URLs
+            if (!url.startsWith('http://') && !url.startsWith('https://')) return null
+            
+            // Parse size and filter out images under 100KB (100,000 bytes)
+            const sizeBytes = parseInt(sizeStr, 10)
+            if (isNaN(sizeBytes) || sizeBytes < 100000) return null
+            
+            return url
+          }
+          return null
+        })
+        .filter((url): url is string => url !== null)
+    } else {
+      // Parse regular URL list (one URL per line)
+      return lines.filter(url => url.startsWith('http://') || url.startsWith('https://'))
+    }
   }
 
   const downloadImageFromUrl = async (url: string): Promise<Blob> => {
@@ -131,7 +170,7 @@ export function ImageOptimizerPage() {
     return successfulDownloads
   }
 
-  const convertImageToWebP = async (imageBlob: Blob, quality: number = 0.75): Promise<Blob> => {
+  const convertImageToWebP = async (imageBlob: Blob, quality: number = 0.85): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
@@ -178,7 +217,7 @@ export function ImageOptimizerPage() {
       // Convert all images in this batch simultaneously
       const batchPromises = batch.map(async (imageWithFilename, batchIndex) => {
         try {
-          const convertedBlob = await convertImageToWebP(imageWithFilename.blob, 0.75)
+          const convertedBlob = await convertImageToWebP(imageWithFilename.blob, 0.85)
           // Ensure filename has .webp extension
           const filename = imageWithFilename.filename.endsWith('.webp') ? 
             imageWithFilename.filename : 
@@ -204,72 +243,102 @@ export function ImageOptimizerPage() {
     return convertedImages
   }
 
-  const cropImageBy5Pixels = async (imageBlob: Blob): Promise<Blob> => {
+  const optimizeImageSize = async (imageBlob: Blob, maxIterations: number = 100): Promise<Blob> => {
+    const targetSize = 100 * 1024 // 100KB in bytes
+    
+    // If already under 100KB, return as-is
+    if (imageBlob.size <= targetSize) {
+      return imageBlob
+    }
+    
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       const img = new Image()
       
-      img.onload = () => {
-        // Crop 5 pixels from width and height (2.5px from each side)
-        const newWidth = Math.max(10, img.width - 5) // Minimum size of 10px
-        const newHeight = Math.max(10, img.height - 5) // Minimum size of 10px
+      img.onload = async () => {
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'))
+          return
+        }
         
-        canvas.width = newWidth
-        canvas.height = newHeight
+        // Set initial canvas size to image size
+        canvas.width = img.width
+        canvas.height = img.height
+        ctx.drawImage(img, 0, 0)
         
-        if (ctx) {
-          // Draw cropped image (crop 2.5px from each side)
+        let currentWidth = img.width
+        let currentHeight = img.height
+        let iterations = 0
+        
+        // Keep cropping in canvas until we get under 100KB when encoded
+        while (iterations < maxIterations) {
+          // Test encode at current size
+          const testBlob = await new Promise<Blob>((resolveBlob) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  resolveBlob(blob)
+                } else {
+                  resolveBlob(new Blob()) // Return empty blob as fallback
+                }
+              },
+              'image/webp',
+              0.85
+            )
+          })
+          
+          if (testBlob.size <= targetSize) {
+            resolve(testBlob)
+            return
+          }
+          
+          // Crop 5 pixels (2.5px from each side) and redraw
+          const newWidth = Math.max(10, currentWidth - 5) // Minimum size of 10px
+          const newHeight = Math.max(10, currentHeight - 5) // Minimum size of 10px
+          
+          // If we can't crop any more, return what we have
+          if (newWidth === currentWidth && newHeight === currentHeight) {
+            resolve(testBlob)
+            return
+          }
+          
+          currentWidth = newWidth
+          currentHeight = newHeight
+          
+          // Resize canvas and redraw cropped image
+          canvas.width = currentWidth
+          canvas.height = currentHeight
+          
+          // Draw cropped portion of original image
           ctx.drawImage(
-            img, 
-            2.5, 2.5, // Source x, y (start cropping from 2.5px in)
-            newWidth, newHeight, // Source width, height
+            img,
+            2.5, 2.5, // Source x, y (crop 2.5px from each side)
+            currentWidth, currentHeight, // Source width, height
             0, 0, // Destination x, y
-            newWidth, newHeight // Destination width, height
+            currentWidth, currentHeight // Destination width, height
           )
           
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob)
-              } else {
-                reject(new Error('Failed to crop image'))
-              }
-            },
-            'image/webp',
-            0.75 // Maintain same quality
-          )
-        } else {
-          reject(new Error('Failed to get canvas context'))
+          iterations++
         }
+        
+        // Final encode if we hit max iterations
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob)
+            } else {
+              reject(new Error('Failed to create final optimized image'))
+            }
+          },
+          'image/webp',
+          0.85
+        )
       }
       
-      img.onerror = () => reject(new Error('Failed to load image for cropping'))
+      img.onerror = () => reject(new Error('Failed to load image for optimization'))
       img.src = URL.createObjectURL(imageBlob)
     })
-  }
-
-  const optimizeImageSize = async (imageBlob: Blob, maxIterations: number = 100): Promise<Blob> => {
-    const targetSize = 100 * 1024 // 100KB in bytes
-    let currentBlob = imageBlob
-    let iterations = 0
-    
-    // If already under 100KB, return as-is
-    if (currentBlob.size <= targetSize) {
-      return currentBlob
-    }
-    
-    while (currentBlob.size > targetSize && iterations < maxIterations) {
-      try {
-        currentBlob = await cropImageBy5Pixels(currentBlob)
-        iterations++
-      } catch (error) {
-        console.error(`Error cropping image on iteration ${iterations}:`, error)
-        break
-      }
-    }
-    
-    return currentBlob
   }
 
   const optimizeAllImageSizes = async (images: ImageWithFilename[], batchSize: number = 6): Promise<ImageWithFilename[]> => {
@@ -464,7 +533,8 @@ export function ImageOptimizerPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <ScrollFadeIn>
+        <Card>
         <CardHeader>
           <CardTitle>Input Method</CardTitle>
         </CardHeader>
@@ -478,11 +548,11 @@ export function ImageOptimizerPage() {
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="urls" id="urls" />
-                <Label htmlFor="urls">Paste URLs</Label>
+                <SelectableLabel htmlFor="urls">Paste URLs</SelectableLabel>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="files" id="files" />
-                <Label htmlFor="files">Upload Images</Label>
+                <SelectableLabel htmlFor="files">Upload Images</SelectableLabel>
               </div>
             </RadioGroup>
           </div>
@@ -490,12 +560,14 @@ export function ImageOptimizerPage() {
           {/* URL Input */}
           {inputMode === 'urls' && (
             <div className="space-y-2">
-              <Label htmlFor="url-input">Image URLs (one per line)</Label>
+              <SelectableLabel htmlFor="url-input">Image URLs (one per line) or Screaming Frog data</SelectableLabel>
               <Textarea
                 id="url-input"
-                placeholder={`https://example.com/image1.jpg
+                placeholder={`URLs (one per line):
+https://example.com/image1.jpg
 https://example.com/image2.png
-https://example.com/image3.gif`}
+
+Or paste Screaming Frog data (will auto-filter images >100KB)`}
                 value={urls}
                 onChange={(e) => setUrls(e.target.value)}
                 className="h-48 font-mono text-sm resize-none overflow-y-auto"
@@ -507,7 +579,7 @@ https://example.com/image3.gif`}
           {/* File Upload */}
           {inputMode === 'files' && (
             <div className="space-y-2">
-              <Label htmlFor="file-input">Select Images</Label>
+              <SelectableLabel htmlFor="file-input">Select Images</SelectableLabel>
               <div className="flex items-center gap-1.5">
                 <div className="relative w-48">
                   <input
@@ -593,6 +665,7 @@ https://example.com/image3.gif`}
           </div>
         </CardContent>
       </Card>
+      </ScrollFadeIn>
     </div>
   )
 }

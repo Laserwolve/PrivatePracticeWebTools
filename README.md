@@ -49,7 +49,7 @@ The built files will be in the `dist` directory.
 src/
 ├── components/
 │   ├── SchemaGenerator.tsx      # Structured data markup tool
-│   ├── LegalPageGenerator.tsx   # Legal document generator
+│   ├── LegalTextGenerator.tsx   # Legal document generator
 │   ├── ImageOptimizer.tsx       # Image optimization tool
 │   ├── ThemeToggle.tsx         # Dark/light mode toggle
 │   └── ui/                     # Reusable UI components
@@ -113,7 +113,7 @@ Generate structured data markup for your therapy practice to improve search engi
 - **Specialty Page Schema** - Optimize individual service pages (anxiety therapy, couples counseling, etc.)
 - **FAQ Schema** - Structure frequently asked questions for better search results
 
-### Legal Page Generator
+### Legal Text Generator
 Create legally compliant pages required for therapy practices:
 - **Terms of Service** - Comprehensive terms tailored for mental health services
 - **Privacy Policy** - HIPAA-aware privacy policies for therapy practices

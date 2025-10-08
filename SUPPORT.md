@@ -40,7 +40,7 @@ Welcome to Private Practice Web Tools support! This guide will help you get the 
 - Add social media URLs if your practice maintains professional profiles
 - Keep descriptions accurate and professional
 
-### Legal Page Generator
+### Legal Text Generator
 
 #### Common Issues
 **Q: The generated content doesn't match my state's requirements**

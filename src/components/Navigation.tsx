@@ -11,7 +11,7 @@ export function Navigation() {
 
   const navItems = [
     { path: '/schema-generator', label: 'Schema Generator', icon: FileCode },
-    { path: '/legal-page-generator', label: 'Legal Page Generator', icon: Scale },
+    { path: '/legal-text-generator', label: 'Legal Text Generator', icon: Scale },
     { path: '/image-optimizer', label: 'Image Optimizer', icon: Image },
   ]
 
@@ -57,7 +57,7 @@ export function Navigation() {
               className="flex items-center gap-2"
             >
               <Mail className="h-4 w-4" />
-              Contact
+              Support
             </Button>
           </div>
         </div>
