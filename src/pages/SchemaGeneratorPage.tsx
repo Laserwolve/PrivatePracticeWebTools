@@ -67,6 +67,8 @@ interface SocialMedia {
 interface GoogleBusinessProfile {
   id: string
   url: string
+  latitude?: string
+  longitude?: string
 }
 
 // ISO-3166 Alpha-2 country codes
@@ -546,20 +548,22 @@ export function SchemaGeneratorPage() {
 
   // Handler for Google Business Profile URL parsing
   const handleGoogleBusinessProfileChange = useCallback(async (id: string, value: string) => {
-    // Update the google business profile
-    setGoogleBusinessProfiles(prev => prev.map(profile => 
-      profile.id === id ? { ...profile, url: value } : profile
-    ))
-    
-    // Validate URL
-    validateUrl(`googleBusiness_${id}`, value)
-    
     // Then handle Google Maps URL parsing
     if (value.includes('google.com/maps')) {
       try {
         const { latitude, longitude } = await parseGoogleBusinessUrl(value)
         
-        // Update the first address with the parsed coordinates
+        // Update the google business profile with URL and coordinates
+        setGoogleBusinessProfiles(prev => prev.map(profile => 
+          profile.id === id ? { 
+            ...profile, 
+            url: value, 
+            latitude: latitude || '', 
+            longitude: longitude || '' 
+          } : profile
+        ))
+        
+        // Also update the first address with the parsed coordinates for backward compatibility
         if ((latitude && longitude)) {
           setAddresses(prev => 
             prev.map((addr, index) => 
@@ -572,8 +576,20 @@ export function SchemaGeneratorPage() {
       } catch (error) {
         console.error('Error parsing Google Business URL:', error)
         toast.error('Error parsing Google Business Profile URL')
+        // Update just the URL if parsing fails
+        setGoogleBusinessProfiles(prev => prev.map(profile => 
+          profile.id === id ? { ...profile, url: value } : profile
+        ))
       }
+    } else {
+      // Update just the URL and clear coordinates if it's not a Google Maps URL
+      setGoogleBusinessProfiles(prev => prev.map(profile => 
+        profile.id === id ? { ...profile, url: value, latitude: '', longitude: '' } : profile
+      ))
     }
+    
+    // Validate URL
+    validateUrl(`googleBusiness_${id}`, value)
   }, [parseGoogleBusinessUrl, validateUrl])
 
 
@@ -883,13 +899,30 @@ export function SchemaGeneratorPage() {
         ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
       })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
       
-      // Create geo coordinates if available (use first address with coordinates)
-      const addressWithCoordinates = addresses.find(addr => addr.latitude && addr.longitude)
-      const orgGeoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
-        "@type": "GeoCoordinates",
-        "latitude": parseFloat(addressWithCoordinates.latitude),
-        "longitude": parseFloat(addressWithCoordinates.longitude)
-      } : null
+      // Create geo coordinates only from Google Business Profiles
+      const googleBusinessCoordinates = googleBusinessProfiles.filter(profile => profile.latitude && profile.longitude)
+      
+      // Create an array of geo coordinates
+      const allOrgGeoCoordinates: Array<{
+        "@type": string;
+        latitude: number;
+        longitude: number;
+      }> = []
+      
+      // Add Google Business Profile coordinates
+      googleBusinessCoordinates.forEach(profile => {
+        if (profile.latitude && profile.longitude) {
+          allOrgGeoCoordinates.push({
+            "@type": "GeoCoordinates",
+            "latitude": parseFloat(profile.latitude),
+            "longitude": parseFloat(profile.longitude)
+          })
+        }
+      })
+      
+      // Use single geo coordinate if only one, array if multiple, or null if none
+      const orgGeoCoordinates = allOrgGeoCoordinates.length === 1 ? allOrgGeoCoordinates[0] : 
+                               allOrgGeoCoordinates.length > 1 ? allOrgGeoCoordinates : null
       
       const schema: any = {
         "@context": "https://schema.org",
@@ -964,13 +997,30 @@ export function SchemaGeneratorPage() {
         ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
       })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
 
-      // Create geo coordinates (use first address with coordinates)
-      const addressWithCoordinates = addresses.find(addr => addr.latitude && addr.longitude)
-      const geoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
-        "@type": "GeoCoordinates",
-        "latitude": parseFloat(addressWithCoordinates.latitude),
-        "longitude": parseFloat(addressWithCoordinates.longitude)
-      } : null
+      // Create geo coordinates only from Google Business Profiles
+      const googleBusinessCoordinates = googleBusinessProfiles.filter(profile => profile.latitude && profile.longitude)
+      
+      // Create an array of geo coordinates
+      const allGeoCoordinates: Array<{
+        "@type": string;
+        latitude: number;
+        longitude: number;
+      }> = []
+      
+      // Add Google Business Profile coordinates
+      googleBusinessCoordinates.forEach(profile => {
+        if (profile.latitude && profile.longitude) {
+          allGeoCoordinates.push({
+            "@type": "GeoCoordinates",
+            "latitude": parseFloat(profile.latitude),
+            "longitude": parseFloat(profile.longitude)
+          })
+        }
+      })
+      
+      // Use single geo coordinate if only one, array if multiple, or null if none
+      const geoCoordinates = allGeoCoordinates.length === 1 ? allGeoCoordinates[0] : 
+                            allGeoCoordinates.length > 1 ? allGeoCoordinates : null
 
       // Create LocalBusiness entity for specialty page
       const localBusiness: any = {
@@ -1052,12 +1102,30 @@ export function SchemaGeneratorPage() {
       ...(addr.addressCountry && { "addressCountry": addr.addressCountry })
     })).filter(addr => Object.keys(addr).length > 1) : [] // Filter out addresses with only @type
 
-    const addressWithCoordinates = allAddresses.find(addr => addr.latitude && addr.longitude)
-    const geoCoordinates = addressWithCoordinates && addressWithCoordinates.latitude && addressWithCoordinates.longitude ? {
-      "@type": "GeoCoordinates",
-      "latitude": parseFloat(addressWithCoordinates.latitude),
-      "longitude": parseFloat(addressWithCoordinates.longitude)
-    } : null
+    // Create geo coordinates only from Google Business Profiles
+    const googleBusinessCoordinates = googleBusinessProfiles.filter(profile => profile.latitude && profile.longitude)
+    
+    // Create an array of geo coordinates
+    const allGeoCoordinates: Array<{
+      "@type": string;
+      latitude: number;
+      longitude: number;
+    }> = []
+    
+    // Add Google Business Profile coordinates
+    googleBusinessCoordinates.forEach(profile => {
+      if (profile.latitude && profile.longitude) {
+        allGeoCoordinates.push({
+          "@type": "GeoCoordinates",
+          "latitude": parseFloat(profile.latitude),
+          "longitude": parseFloat(profile.longitude)
+        })
+      }
+    })
+    
+    // Use single geo coordinate if only one, array if multiple, or null if none
+    const geoCoordinates = allGeoCoordinates.length === 1 ? allGeoCoordinates[0] : 
+                          allGeoCoordinates.length > 1 ? allGeoCoordinates : null
 
     // Create makesOffer for services
     const makesOffer = specialties.length > 0 ? specialties.map(specialty => ({
