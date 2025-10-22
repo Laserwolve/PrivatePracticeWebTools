@@ -271,7 +271,7 @@ export function ImageOptimizerPage() {
         let currentHeight = img.height
         let iterations = 0
         
-        // Keep cropping in canvas until we get under 100KB when encoded
+        // Keep resizing canvas until we get under 100KB when encoded
         while (iterations < maxIterations) {
           // Test encode at current size
           const testBlob = await new Promise<Blob>((resolveBlob) => {
@@ -293,11 +293,12 @@ export function ImageOptimizerPage() {
             return
           }
           
-          // Crop 5 pixels (2.5px from each side) and redraw
-          const newWidth = Math.max(10, currentWidth - 5) // Minimum size of 10px
-          const newHeight = Math.max(10, currentHeight - 5) // Minimum size of 10px
+          // Reduce dimensions by 2% each iteration to preserve aspect ratio
+          const scaleFactor = 0.98
+          const newWidth = Math.max(10, Math.floor(currentWidth * scaleFactor)) // Minimum size of 10px
+          const newHeight = Math.max(10, Math.floor(currentHeight * scaleFactor)) // Minimum size of 10px
           
-          // If we can't crop any more, return what we have
+          // If we can't reduce any more, return what we have
           if (newWidth === currentWidth && newHeight === currentHeight) {
             resolve(testBlob)
             return
@@ -306,17 +307,17 @@ export function ImageOptimizerPage() {
           currentWidth = newWidth
           currentHeight = newHeight
           
-          // Resize canvas and redraw cropped image
+          // Resize canvas and redraw scaled image
           canvas.width = currentWidth
           canvas.height = currentHeight
           
-          // Draw cropped portion of original image
+          // Draw entire original image scaled down to fit new canvas size
           ctx.drawImage(
             img,
-            2.5, 2.5, // Source x, y (crop 2.5px from each side)
-            currentWidth, currentHeight, // Source width, height
+            0, 0, // Source x, y (use entire original image)
+            img.width, img.height, // Source width, height (entire original)
             0, 0, // Destination x, y
-            currentWidth, currentHeight // Destination width, height
+            currentWidth, currentHeight // Destination width, height (scaled)
           )
           
           iterations++
